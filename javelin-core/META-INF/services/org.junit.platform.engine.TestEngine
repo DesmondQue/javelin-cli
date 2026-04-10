@@ -1,0 +1,4 @@
+org.junit.jupiter.engine.JupiterTestEngine
+org.junit.vintage.engine.VintageTestEngine
+org.junit.vintage.engine.VintageTestEngine
+org.junit.jupiter.engine.JupiterTestEngine

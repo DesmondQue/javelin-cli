@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>javelin-cli</id>
+    <version>1.0.0</version>
+    <title>Javelin CLI - Spectrum-Based Fault Localization</title>
+    <authors>Javelin Contributors</authors>
+    <projectUrl>https://github.com/DesmondQue/javelin-core-cli</projectUrl>
+    <tags>java fault-localization testing debugging sbfl</tags>
+    <summary>Automated Spectrum-Based Fault Localization for Java</summary>
+    <description>
+Javelin is an automated spectrum-based fault localization (SBFL) tool for Java projects.
+It supports Ochiai and Ochiai-MS algorithms to rank suspicious lines of code based on test pass/fail data.
+
+Requires Java 21 or later.
+    </description>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
