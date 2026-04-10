@@ -63,6 +63,15 @@ Requires [Chocolatey](https://chocolatey.org/install).
 choco install javelin-cli
 ```
 
+### Scoop (Windows)
+
+Requires [Scoop](https://scoop.sh/).
+
+```powershell
+scoop bucket add javelin-cli https://github.com/DesmondQue/javelin-cli
+scoop install javelin-cli
+```
+
 ### From Source (All Platforms)
 
 ```bash
