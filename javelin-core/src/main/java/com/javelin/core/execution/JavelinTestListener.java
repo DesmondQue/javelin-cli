@@ -202,15 +202,32 @@ public class JavelinTestListener implements TestExecutionListener {
 
     /**
      * Extracts the fully qualified class name from a JUnit unique ID.
-     * Handles both Jupiter [class:...] and Vintage [runner:...] formats.
+     * Handles Jupiter [class:...], Jupiter [nested-class:...], and Vintage [runner:...] formats.
+     * 
+     * For nested classes, appends inner class names with '$' to match bytecode naming:
+     *   [class:com.example.OuterTest]/[nested-class:InnerTest] -> com.example.OuterTest$InnerTest
      */
     private String extractClassName(String uniqueId) {
         // JUnit Jupiter: [engine:junit-jupiter]/[class:com.example.TestClass]/[method:testMethod()]
+        //   or nested:   [engine:junit-jupiter]/[class:com.example.Outer]/[nested-class:Inner]/[method:test()]
         int classStart = uniqueId.indexOf("[class:");
         if (classStart >= 0) {
             int classEnd = uniqueId.indexOf("]", classStart);
             if (classEnd > classStart) {
-                return uniqueId.substring(classStart + 7, classEnd);
+                String className = uniqueId.substring(classStart + 7, classEnd);
+                
+                // Append any [nested-class:...] segments with '$' separator
+                int searchFrom = classEnd;
+                while (true) {
+                    int nestedStart = uniqueId.indexOf("[nested-class:", searchFrom);
+                    if (nestedStart < 0) break;
+                    int nestedEnd = uniqueId.indexOf("]", nestedStart);
+                    if (nestedEnd <= nestedStart) break;
+                    className += "$" + uniqueId.substring(nestedStart + 14, nestedEnd);
+                    searchFrom = nestedEnd;
+                }
+                
+                return className;
             }
         }
         // JUnit Vintage: [engine:junit-vintage]/[runner:com.example.TestClass]/[test:testMethod(...)]
