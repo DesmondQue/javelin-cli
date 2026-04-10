@@ -6,8 +6,7 @@ class JavelinCli < Formula
   sha256 "68d258d7d5d548b370c5292ef97129143370dbd70b5f2600fb3cfd91b7d79d2a"
   license "MIT"
 
-  depends_on "openjdk@21" => :optional
-  depends_on java: "21+"
+  depends_on "openjdk@21"
 
   def install
     # Remove Windows batch files
@@ -15,13 +14,16 @@ class JavelinCli < Formula
 
     libexec.install Dir["*"]
 
-    # Create a wrapper script; use the system Java if JAVA_HOME is already set
-    env = if Formula["openjdk@21"].any_version_installed?
-      { JAVA_HOME: Formula["openjdk@21"].opt_prefix }
-    else
-      {}
-    end
-    (bin/"javelin").write_env_script libexec/"bin/javelin", env
+    # Create a wrapper script pointing JAVA_HOME to the Homebrew-managed JDK
+    (bin/"javelin").write_env_script libexec/"bin/javelin",
+      JAVA_HOME: Formula["openjdk@21"].opt_prefix
+  end
+
+  def caveats
+    <<~EOS
+      javelin requires Java 21+. Homebrew's openjdk@21 is installed automatically.
+      If you prefer a different JDK, set JAVA_HOME to its path before running javelin.
+    EOS
   end
 
   test do
