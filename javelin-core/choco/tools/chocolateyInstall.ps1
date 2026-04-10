@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $packageName = 'javelin-cli'
 $toolsDir = "$(Split-Path -Parent $MyInvocation.MyCommand.Definition)"
@@ -18,7 +18,7 @@ try {
 
 # Download and extract the distribution zip from GitHub Releases
 $version = $env:chocolateyPackageVersion
-$url = "https://github.com/DesmondQue/javelin-cli/releases/download/v${version}/javelin-cli-${version}.zip"
+$url = "https://github.com/DesmondQue/javelin-cli/releases/download/v${version}/javelin-cli-1.0.0.zip"
 
 $installDir = Join-Path $toolsDir 'javelin-cli'
 

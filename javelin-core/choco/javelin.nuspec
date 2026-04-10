@@ -2,18 +2,38 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>javelin-cli</id>
-    <version>1.0.0</version>
+    <version>1.0.0-beta</version>
     <title>Javelin CLI - Spectrum-Based Fault Localization</title>
-    <authors>Javelin Contributors</authors>
+    <authors>Desmond Que</authors>
+    <owners>DesmondQue</owners>
     <projectUrl>https://github.com/DesmondQue/javelin-cli</projectUrl>
-    <tags>java fault-localization testing debugging sbfl</tags>
+    <licenseUrl>https://github.com/DesmondQue/javelin-cli/blob/main/LICENSE</licenseUrl>
+    <packageSourceUrl>https://github.com/DesmondQue/javelin-cli/tree/main/javelin-core/choco</packageSourceUrl>
+    <bugTrackerUrl>https://github.com/DesmondQue/javelin-cli/issues</bugTrackerUrl>
+    <docsUrl>https://github.com/DesmondQue/javelin-cli#readme</docsUrl>
+    <tags>java fault-localization testing debugging sbfl cli developer-tools</tags>
     <summary>Automated Spectrum-Based Fault Localization for Java</summary>
     <description>
-Javelin is an automated spectrum-based fault localization (SBFL) tool for Java projects.
+Javelin CLI is an automated spectrum-based fault localization (SBFL) tool for Java projects.
 It supports Ochiai and Ochiai-MS algorithms to rank suspicious lines of code based on test pass/fail data.
 
-Requires Java 21 or later.
+## Features
+
+- **Ochiai SBFL** — Standard spectrum-based fault localization
+- **Ochiai-MS (Experimental)** — Mutation score–weighted SBFL using PITest
+- **JaCoCo integration** — Automatic coverage instrumentation
+- **Parallel test execution** — Configurable thread count
+- **CSV output** — Ranked suspiciousness report
+
+## Requirements
+
+- Java 21 or later (any vendor: Temurin, Oracle, Corretto, GraalVM, etc.)
+
+## Notes
+
+This is a pre-release build for early testing. The Ochiai-MS algorithm is experimental.
     </description>
+    <releaseNotes>https://github.com/DesmondQue/javelin-cli/releases/tag/v1.0.0-beta</releaseNotes>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
   </metadata>
   <files>

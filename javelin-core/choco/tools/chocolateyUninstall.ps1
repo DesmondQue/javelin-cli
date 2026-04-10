@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $packageName = 'javelin-cli'
 $toolsDir = "$(Split-Path -Parent $MyInvocation.MyCommand.Definition)"
