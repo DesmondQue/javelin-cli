@@ -55,7 +55,7 @@ brew tap DesmondQue/javelin-cli https://github.com/DesmondQue/javelin-cli.git
 brew install javelin-cli
 ```
 
-### Chocolatey (Windows)
+### Chocolatey (Windows) — ⚠️ FOR APPROVAL. Use Scoop.
 
 Requires [Chocolatey](https://chocolatey.org/install).
 
