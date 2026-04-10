@@ -5,7 +5,7 @@
     <version>1.0.0</version>
     <title>Javelin CLI - Spectrum-Based Fault Localization</title>
     <authors>Javelin Contributors</authors>
-    <projectUrl>https://github.com/DesmondQue/javelin-core-cli</projectUrl>
+    <projectUrl>https://github.com/DesmondQue/javelin-cli</projectUrl>
     <tags>java fault-localization testing debugging sbfl</tags>
     <summary>Automated Spectrum-Based Fault Localization for Java</summary>
     <description>

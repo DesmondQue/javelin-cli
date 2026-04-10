@@ -18,14 +18,14 @@ try {
 
 # Download and extract the distribution zip from GitHub Releases
 $version = $env:chocolateyPackageVersion
-$url = "https://github.com/DesmondQue/javelin-core-cli/releases/download/v${version}/javelin-cli-${version}.zip"
+$url = "https://github.com/DesmondQue/javelin-cli/releases/download/v${version}/javelin-cli-${version}.zip"
 
 $installDir = Join-Path $toolsDir 'javelin-cli'
 
 Install-ChocolateyZipPackage -PackageName $packageName `
     -Url $url `
     -UnzipLocation $toolsDir `
-    -Checksum 'REPLACE_WITH_SHA256' `
+    -Checksum '3e2cafba962a83e600d8346fbb3421c64d15766b0b1b352d96cd56b5f17b3c58' `
     -ChecksumType 'sha256'
 
 # The zip extracts to a folder like javelin-1.0.0/; find the bin directory
