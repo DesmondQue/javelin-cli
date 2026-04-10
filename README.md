@@ -50,6 +50,13 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 
 Requires [Homebrew](https://brew.sh/).
 
+On **macOS**, `openjdk@21` is installed automatically. On **Linux/WSL**, install Java 21+ first:
+
+```bash
+sudo apt install openjdk-21-jdk    # Debian/Ubuntu
+sudo dnf install java-21-openjdk   # Fedora
+```
+
 ```bash
 brew tap DesmondQue/javelin-cli https://github.com/DesmondQue/javelin-cli.git
 brew install javelin-cli
@@ -57,7 +64,7 @@ brew install javelin-cli
 
 ### Chocolatey (Windows) — ⚠️ FOR APPROVAL. Use Scoop.
 
-Requires [Chocolatey](https://chocolatey.org/install).
+Requires [Chocolatey](https://chocolatey.org/install). Requires Java 21+ on your `PATH`.
 
 ```powershell
 choco install javelin-cli
@@ -65,7 +72,7 @@ choco install javelin-cli
 
 ### Scoop (Windows)
 
-Requires [Scoop](https://scoop.sh/).
+Requires [Scoop](https://scoop.sh/). Requires Java 21+ on your `PATH` (e.g. `scoop bucket add java; scoop install java/temurin21-jdk`).
 
 ```powershell
 scoop bucket add javelin-cli https://github.com/DesmondQue/javelin-cli
@@ -73,6 +80,8 @@ scoop install javelin-cli
 ```
 
 ### From Source (All Platforms)
+
+Requires Java 21+ (`java -version` must report 21 or higher).
 
 ```bash
 # 1. Clone the repository
