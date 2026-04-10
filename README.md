@@ -16,6 +16,7 @@ Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javeli
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
+- [License](#license)
 
 ---
 
@@ -276,3 +277,11 @@ CLI Input → Coverage Collection → Data Parsing → Matrix Building → SBFL 
 | **Math** | `OchiaiCalculator`, `OchiaiMSCalculator` | Compute suspiciousness scores |
 | **Mutation** *(ochiai-ms only)* | `MutationRunner`, `MutationScoreCalculator` | Scoped PITest analysis and per-test mutation scoring |
 | **Export** | `CsvExporter` | Write ranked results to CSV |
+
+---
+
+## License
+
+Javelin CLI is open-source software licensed under the [MIT License](LICENSE).
+
+You are free to use, modify, and distribute this software. See the [LICENSE](LICENSE) file for details.
