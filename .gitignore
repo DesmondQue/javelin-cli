@@ -22,3 +22,6 @@ Thumbs.db
 
 # Build outputs
 bin/
+
+# Test subject (local testing only)
+test-subject/
