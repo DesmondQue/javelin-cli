@@ -173,31 +173,39 @@ public class JavelinTestListener implements TestExecutionListener {
     }
 
     /**
-     * Builds a test identifier string from the TestIdentifier
-     * Format: ClassName#methodName
+     * Builds a test identifier string from the TestIdentifier.
+     * Format: SimpleClassName#methodName
+     * 
+     * Uses the uniqueId to extract bytecode-level class and method names,
+     * ensuring consistency with the parent process which discovers tests via ASM.
+     * 
+     * Supports both JUnit Jupiter and JUnit Vintage (JUnit 4) uniqueId formats:
+     *   Jupiter: [engine:junit-jupiter]/[class:com.example.Test]/[method:testMethod()]
+     *   Vintage: [engine:junit-vintage]/[runner:com.example.Test]/[test:testMethod(com.example.Test)]
      */
     private String buildTestId(TestIdentifier testIdentifier) {
-        String displayName = testIdentifier.getDisplayName();
-        String legacyName = testIdentifier.getLegacyReportingName();
-        
-        // format varies: [engine:junit-jupiter]/[class:com.example.TestClass]/[method:testMethod()]
         String uniqueId = testIdentifier.getUniqueId();
         
         String className = extractClassName(uniqueId);
-        String methodName = extractMethodName(displayName, legacyName);
+        String methodName = extractMethodName(uniqueId);
         
         if (className != null && methodName != null) {
             int lastDot = className.lastIndexOf('.');
             String simpleClassName = lastDot >= 0 ? className.substring(lastDot + 1) : className;
             return simpleClassName + "#" + methodName;
         }
-        return legacyName != null ? legacyName : displayName;
+        
+        // Last resort fallback: use legacy reporting name
+        String legacyName = testIdentifier.getLegacyReportingName();
+        return legacyName != null ? legacyName : testIdentifier.getDisplayName();
     }
 
     /**
-     * Extracts the class name from a JUnit unique ID
+     * Extracts the fully qualified class name from a JUnit unique ID.
+     * Handles both Jupiter [class:...] and Vintage [runner:...] formats.
      */
     private String extractClassName(String uniqueId) {
+        // JUnit Jupiter: [engine:junit-jupiter]/[class:com.example.TestClass]/[method:testMethod()]
         int classStart = uniqueId.indexOf("[class:");
         if (classStart >= 0) {
             int classEnd = uniqueId.indexOf("]", classStart);
@@ -205,29 +213,46 @@ public class JavelinTestListener implements TestExecutionListener {
                 return uniqueId.substring(classStart + 7, classEnd);
             }
         }
+        // JUnit Vintage: [engine:junit-vintage]/[runner:com.example.TestClass]/[test:testMethod(...)]
+        int runnerStart = uniqueId.indexOf("[runner:");
+        if (runnerStart >= 0) {
+            int runnerEnd = uniqueId.indexOf("]", runnerStart);
+            if (runnerEnd > runnerStart) {
+                return uniqueId.substring(runnerStart + 8, runnerEnd);
+            }
+        }
         return null;
     }
 
     /**
-     * Extracts the method name from display name or legacy name
+     * Extracts the bytecode method name from the JUnit unique ID.
+     * This is more reliable than using displayName (which can be customized via @DisplayName)
+     * or legacyReportingName (which has different formats per engine).
+     * 
+     * Jupiter: [method:testMethod()] -> testMethod
+     * Vintage: [test:testMethod(com.example.TestClass)] -> testMethod
      */
-    private String extractMethodName(String displayName, String legacyName) {
-        String name = displayName;
-        if (name != null) {
-            int parenIndex = name.indexOf('(');
-            if (parenIndex > 0) {
-                name = name.substring(0, parenIndex);
+    private String extractMethodName(String uniqueId) {
+        // JUnit Jupiter: [method:testMethod()] or [method:testMethod(Type)]
+        int methodStart = uniqueId.indexOf("[method:");
+        if (methodStart >= 0) {
+            int parenOrEnd = uniqueId.indexOf("(", methodStart);
+            int bracketEnd = uniqueId.indexOf("]", methodStart);
+            int end = (parenOrEnd >= 0 && parenOrEnd < bracketEnd) ? parenOrEnd : bracketEnd;
+            if (end > methodStart + 8) {
+                return uniqueId.substring(methodStart + 8, end);
             }
-            return name;
         }
-        if (legacyName != null) {
-            int parenIndex = legacyName.indexOf('(');
-            if (parenIndex > 0) {
-                return legacyName.substring(0, parenIndex);
+        // JUnit Vintage: [test:testMethod(com.example.TestClass)]
+        int testStart = uniqueId.indexOf("[test:");
+        if (testStart >= 0) {
+            int parenOrEnd = uniqueId.indexOf("(", testStart);
+            int bracketEnd = uniqueId.indexOf("]", testStart);
+            int end = (parenOrEnd >= 0 && parenOrEnd < bracketEnd) ? parenOrEnd : bracketEnd;
+            if (end > testStart + 6) {
+                return uniqueId.substring(testStart + 6, end);
             }
-            return legacyName;
         }
-        
         return null;
     }
 

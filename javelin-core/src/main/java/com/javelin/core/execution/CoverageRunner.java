@@ -201,8 +201,32 @@ public class CoverageRunner {
         if (!result.stdout().isBlank()) {
             System.out.println(result.stdout());
         }
-        if (!result.stderr().isBlank() && !result.stderr().contains("WARNING: Delegated")) {
-            System.err.println(result.stderr());
+        if (!result.stderr().isBlank()) {
+            // Filter line-by-line: only suppress JVM delegation warnings, not all errors
+            for (String line : result.stderr().split("\\R")) {
+                if (!line.isBlank() && !line.contains("WARNING: Delegated")) {
+                    System.err.println(line);
+                }
+            }
+        }
+        
+        // Check subprocess exit code
+        if (result.timedOut()) {
+            System.err.println("      ERROR: Subprocess timed out after 600 seconds");
+        } else if (result.exitCode() != 0 && result.exitCode() != 1) {
+            // 0 = all tests passed, 1 = some tests failed (both are valid)
+            System.err.println("      WARNING: Subprocess exited with unexpected code: " + result.exitCode());
+        }
+        
+        // List temp directory contents for diagnostic purposes
+        try (var stream = Files.list(tempDir)) {
+            List<Path> tempFiles = stream.toList();
+            System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
+            for (Path f : tempFiles) {
+                System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");
+            }
+        } catch (IOException e) {
+            System.err.println("      WARNING: Could not list temp directory: " + e.getMessage());
         }
         
         // Collect results from output directory
@@ -253,12 +277,13 @@ public class CoverageRunner {
     private List<TestExecResult> collectResults(List<String> testSpecifiers) {
         List<TestExecResult> results = new ArrayList<>();
         
-        // Try to read the serialized results file
+        // Try to read the results file
         Map<String, Boolean> testResults = null;
         try {
             testResults = SingleJvmTestRunner.readResultsFile(tempDir);
-        } catch (Exception e) {
-            System.err.println("      WARNING: Could not read test results file: " + e.getMessage());
+            System.out.println("      Read " + testResults.size() + " test result(s) from results file");
+        } catch (IOException e) {
+            System.err.println("      WARNING: Could not read test results file: " + tempDir.resolve("test-results.dat") + " - " + e.getMessage());
         }
         
         for (String specifier : testSpecifiers) {

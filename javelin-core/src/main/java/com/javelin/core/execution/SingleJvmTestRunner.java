@@ -1,13 +1,13 @@
 package com.javelin.core.execution;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -96,6 +96,7 @@ public class SingleJvmTestRunner {
     private static int runTests(RunnerConfig config) throws IOException {
 
         Files.createDirectories(config.outputDir);
+        System.out.println("      Output directory: " + config.outputDir.toAbsolutePath());
         JavelinTestListener coverageListener = new JavelinTestListener(config.outputDir);
         SummaryGeneratingListener summaryListener = new SummaryGeneratingListener();
         
@@ -148,29 +149,43 @@ public class SingleJvmTestRunner {
     }
 
     /**
-     * Writes test results to a serialized file.
+     * Writes test results to a text file.
+     * Format: one line per test, "testId=PASSED" or "testId=FAILED"
      */
     private static void writeResultsFile(Path outputDir, Map<String, Boolean> results) throws IOException {
         Path resultsFile = outputDir.resolve(RESULTS_FILE);
         
-        try (ObjectOutputStream oos = new ObjectOutputStream(
-                new FileOutputStream(resultsFile.toFile()))) {
-            oos.writeObject(new java.util.HashMap<>(results));
+        try (BufferedWriter writer = Files.newBufferedWriter(resultsFile, StandardCharsets.UTF_8)) {
+            for (Map.Entry<String, Boolean> entry : results.entrySet()) {
+                writer.write(entry.getKey() + "=" + (entry.getValue() ? "PASSED" : "FAILED"));
+                writer.newLine();
+            }
         }
+        System.out.println("      Wrote " + results.size() + " result(s) to " + resultsFile.toAbsolutePath());
     }
 
     /**
-     * Reads test results from the serialized file.
+     * Reads test results from the text file.
      * Used by CoverageRunner to retrieve results after process completes.
      */
-    @SuppressWarnings("unchecked")
-    public static Map<String, Boolean> readResultsFile(Path outputDir) throws IOException, ClassNotFoundException {
+    public static Map<String, Boolean> readResultsFile(Path outputDir) throws IOException {
         Path resultsFile = outputDir.resolve(RESULTS_FILE);
+        Map<String, Boolean> results = new HashMap<>();
         
-        try (ObjectInputStream ois = new ObjectInputStream(
-                new FileInputStream(resultsFile.toFile()))) {
-            return (Map<String, Boolean>) ois.readObject();
+        try (BufferedReader reader = Files.newBufferedReader(resultsFile, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                int eq = line.lastIndexOf('=');
+                if (eq > 0) {
+                    String testId = line.substring(0, eq);
+                    boolean passed = "PASSED".equals(line.substring(eq + 1));
+                    results.put(testId, passed);
+                }
+            }
         }
+        return results;
     }
 
     /**
