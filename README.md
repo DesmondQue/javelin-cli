@@ -2,6 +2,10 @@
 
 Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javelin analyzes test pass/fail data and code coverage to rank lines of code by suspiciousness, helping you find bugs faster.
 
+Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS**, an **experimental** algorithm that integrates mutation testing into the SBFL pipeline. Ochiai-MS is a novel contribution of the research study overseeing the development of Javelin, exploring whether mutation score–weighted test spectra can improve fault localization accuracy.
+
+> **⚠️ Experimental:** The Ochiai-MS algorithm (`--algorithm ochiai-ms`) is an active area of research and should be considered experimental. Results and behavior may change in future releases.
+
 ---
 
 ## Table of Contents
@@ -157,7 +161,9 @@ Where:
 javelin -a ochiai -t build/classes/java/main -T build/classes/java/test -o report.csv
 ```
 
-### Ochiai-MS (Mutation Score weighted)
+### Ochiai-MS (Mutation Score weighted) — ⚠️ Experimental
+
+> **This algorithm is experimental.** It is a novel research contribution exploring the integration of mutation testing into SBFL. Results may differ from standard Ochiai and the approach is under active evaluation.
 
 Enhanced variant that runs scoped [PITest](https://pitest.org/) mutation analysis on the fault region (lines covered by failing tests), then weights each passing test by its mutation-killing strength. This penalizes weak passing tests and rewards strong ones.
 
