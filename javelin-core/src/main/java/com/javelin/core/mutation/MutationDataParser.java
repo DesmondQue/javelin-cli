@@ -31,7 +31,10 @@ import com.javelin.core.model.MutationData;
  *   - FULL_MUTATION_MATRIX mode: {@code <killingTests>} with pipe-separated test names
  *   - Standard mode (fallback): {@code <killingTest>} with a single test name
  *
- * PITest test name format: "com.example.TestClass.testMethod(com.example.TestClass)"
+ * PITest test name formats:
+ *   - Standard: "com.example.TestClass.testMethod(com.example.TestClass)"
+ *   - Jupiter:  "...[class:com.example.TestClass]/[method:testMethod()]"
+ *   - Vintage:  "...[runner:com.example.TestClass]/[test:testMethod(com.example.TestClass)]"
  * Javelin test ID format:  "SimpleClassName#methodName"
  *
  * A normalization step converts PITest test names to Javelin test IDs so the
@@ -140,6 +143,7 @@ public class MutationDataParser {
      * PITest format examples:
      *   "com.example.CalculatorTest.testAdd(com.example.CalculatorTest)"
      *   "com.example.CalculatorTest.[engine:junit-jupiter]/[class:com.example.CalculatorTest]/[method:testAdd()]"
+     *   "com.example.CalculatorTest.[engine:junit-vintage]/[runner:com.example.CalculatorTest]/[test:testAdd(com.example.CalculatorTest)]"
      *
      * Javelin format:
      *   "CalculatorTest#testAdd"
@@ -160,6 +164,14 @@ public class MutationDataParser {
             methodName = extractBetween(pitestTestName, "[method:", "(");
             if (methodName == null) {
                 methodName = extractBetween(pitestTestName, "[method:", "]");
+            }
+        }
+        // Handle JUnit Vintage unique ID format: [engine:junit-vintage]/[runner:...]/[test:...]
+        else if (pitestTestName.contains("[runner:") && pitestTestName.contains("[test:")) {
+            className = extractBetween(pitestTestName, "[runner:", "]");
+            methodName = extractBetween(pitestTestName, "[test:", "(");
+            if (methodName == null) {
+                methodName = extractBetween(pitestTestName, "[test:", "]");
             }
         }
         // Handle standard PITest format: com.example.TestClass.testMethod(com.example.TestClass)
