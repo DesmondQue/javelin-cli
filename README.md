@@ -43,6 +43,8 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 
 > **Note:** Any Java 21+ JDK works (Temurin, Oracle, Corretto, GraalVM, etc.). Ensure `java -version` reports 21 or higher, or set `JAVA_HOME` to your JDK 21 installation.
 
+> **⚠️ Agent Compatibility:** Javelin uses [JaCoCo](https://www.jacoco.org/) for coverage instrumentation. Projects whose tests rely on other bytecode manipulation agents (e.g., ByteBuddy, Mockito inline mocking) may experience agent conflicts, causing some tests to fail with errors like "Could not modify all classes." These tests will still be included in the analysis but will be marked as failed, which can affect ranking accuracy. See [Known Limitations](#known-limitations) for details.
+
 ---
 
 ## Installation
