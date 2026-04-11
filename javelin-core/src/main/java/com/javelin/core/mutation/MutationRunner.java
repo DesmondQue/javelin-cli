@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -291,14 +292,25 @@ public class MutationRunner {
      * Uses the per-test coverage data from the JaCoCo coverage phase.
      *
      * CoverageData keys are per-method test IDs (e.g. "CalculatorTest#testAdd"),
-     * but PITest --targetTests expects class names (e.g. "CalculatorTest").
-     * This method extracts class names from the test IDs.
+     * but PITest --targetTests expects fully-qualified class names
+     * (e.g. "com.example.CalculatorTest"). This method extracts simple class names
+     * from the test IDs, then resolves them to FQ names using the test classes directory.
      *
      * Falls back to all test classes if coverageData is null.
      */
     private List<String> filterTestsByFaultRegion(Set<String> targetClassNames) throws IOException {
         if (coverageData == null) {
             return findTestClasses(testPath);
+        }
+
+        // Build a lookup from simple class name → fully-qualified class name
+        List<String> allTestClasses = findTestClasses(testPath);
+        Map<String, String> simpleToFqName = new HashMap<>();
+        for (String fqName : allTestClasses) {
+            String simpleName = fqName.contains(".")
+                    ? fqName.substring(fqName.lastIndexOf('.') + 1)
+                    : fqName;
+            simpleToFqName.put(simpleName, fqName);
         }
 
         Set<String> relevantTestClasses = new HashSet<>();
@@ -310,11 +322,19 @@ public class MutationRunner {
 
             for (String targetClass : targetClassNames) {
                 if (classesCovered.containsKey(targetClass)) {
-                    // Extract class name from test ID (e.g. "CalculatorTest#testAdd" → "CalculatorTest")
-                    String testClassName = testId.contains("#")
+                    // Extract simple class name from test ID (e.g. "CalculatorTest#testAdd" → "CalculatorTest")
+                    String simpleTestClassName = testId.contains("#")
                             ? testId.substring(0, testId.indexOf('#'))
                             : testId;
-                    relevantTestClasses.add(testClassName);
+                    // Resolve to fully-qualified name for PITest
+                    String fqName = simpleToFqName.get(simpleTestClassName);
+                    if (fqName != null) {
+                        relevantTestClasses.add(fqName);
+                    } else {
+                        // Fallback: use the simple name (may not work with PITest, but better than dropping)
+                        System.err.println("      WARNING: Could not resolve FQ name for test class: " + simpleTestClassName);
+                        relevantTestClasses.add(simpleTestClassName);
+                    }
                     break;
                 }
             }
