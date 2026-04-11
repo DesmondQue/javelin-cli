@@ -196,8 +196,12 @@ public class JavelinTestListener implements TestExecutionListener {
         }
         
         // Last resort fallback: use legacy reporting name
+        // Normalize spaces to underscores — @DisplayNameGeneration(ReplaceUnderscores.class)
+        // causes displayName/legacyReportingName to have spaces instead of underscores,
+        // which breaks filename matching with the parent process (ASM uses bytecode names).
         String legacyName = testIdentifier.getLegacyReportingName();
-        return legacyName != null ? legacyName : testIdentifier.getDisplayName();
+        String fallback = legacyName != null ? legacyName : testIdentifier.getDisplayName();
+        return fallback.replace(" ", "_");
     }
 
     /**
@@ -277,7 +281,7 @@ public class JavelinTestListener implements TestExecutionListener {
      * Writes coverage data to an .exec file
      */
     private void writeExecFile(String testId, byte[] data) {
-        String safeFileName = testId.replace("#", "_").replace(".", "_");
+        String safeFileName = testId.replace("#", "_").replace(".", "_").replace(" ", "_");
         Path execFile = outputDirectory.resolve("jacoco-" + safeFileName + ".exec");
         
         try {

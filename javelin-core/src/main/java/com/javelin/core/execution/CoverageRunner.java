@@ -298,7 +298,7 @@ public class CoverageRunner {
             String testId = simpleClassName + "#" + methodName;
             
             // Find the corresponding .exec file
-            String safeFileName = testId.replace("#", "_").replace(".", "_");
+            String safeFileName = testId.replace("#", "_").replace(".", "_").replace(" ", "_");
             Path execFile = tempDir.resolve("jacoco-" + safeFileName + ".exec");
             
             if (Files.exists(execFile)) {
