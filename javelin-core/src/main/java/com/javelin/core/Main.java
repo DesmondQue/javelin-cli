@@ -307,21 +307,78 @@ public class Main implements Callable<Integer> {
             return;
         }
 
-        System.out.printf("Top 5 Most Suspicious Lines:%n%n");
-        System.out.printf("+------+--------------------------------------------+------+------------+%n");
-        System.out.printf("| Rank | Class                                      | Line | Score      |%n");
-        System.out.printf("+------+--------------------------------------------+------+------------+%n");
-        
-        int limit = Math.min(5, results.size());
-        for (int i = 0; i < limit; i++) {
-            SuspiciousnessResult result = results.get(i);
-            System.out.printf("| %4d | %-42s | %4d | %10.4f |%n",
-                    result.rank(),
-                    truncate(result.fullyQualifiedClass(), 42),
-                    result.lineNumber(),
-                    result.score());
+        // --- Ranking Distribution ---
+        // Group results by rank to show distinct suspiciousness tiers
+        java.util.LinkedHashMap<Integer, java.util.List<SuspiciousnessResult>> rankGroups = new java.util.LinkedHashMap<>();
+        for (SuspiciousnessResult r : results) {
+            rankGroups.computeIfAbsent(r.rank(), k -> new java.util.ArrayList<>()).add(r);
         }
-        System.out.printf("+------+--------------------------------------------+------+------------+%n");
+
+        int totalRanks = rankGroups.size();
+        long nonZeroLines = results.stream().filter(r -> r.score() > 0.0).count();
+        double uniqueness = (double) totalRanks / results.size();
+
+        System.out.printf("Ranking Overview:%n%n");
+        System.out.printf("  Total lines tracked:    %d%n", results.size());
+        System.out.printf("  Lines with score > 0:   %d%n", nonZeroLines);
+        System.out.printf("  Distinct score groups:  %d%n", totalRanks);
+        System.out.printf("  Uniqueness (groups/lines): %.2f%%%n%n", uniqueness * 100);
+
+        // --- Suspiciousness Groups (all non-zero) ---
+        System.out.printf("Suspiciousness Ranking (all groups with score > 0):%n%n");
+        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
+        System.out.printf("| Rank | Score      | Lines | Top-N   | Top Classes                                  |%n");
+        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
+
+        int cumulativeLines = 0;
+        for (var entry : rankGroups.entrySet()) {
+            int rank = entry.getKey();
+            java.util.List<SuspiciousnessResult> group = entry.getValue();
+            double score = group.get(0).score();
+
+            if (score <= 0.0) break; // stop at zero-score groups
+
+            cumulativeLines += group.size();
+
+            // Collect distinct class names in this group, sorted by line count descending
+            java.util.LinkedHashMap<String, Integer> classLineCounts = new java.util.LinkedHashMap<>();
+            for (SuspiciousnessResult r : group) {
+                classLineCounts.merge(r.fullyQualifiedClass(), 1, Integer::sum);
+            }
+            java.util.List<java.util.Map.Entry<String, Integer>> sortedClasses = new java.util.ArrayList<>(classLineCounts.entrySet());
+            sortedClasses.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+
+            // Build a compact class summary string
+            StringBuilder classSummary = new StringBuilder();
+            int classesShown = 0;
+            int totalClasses = sortedClasses.size();
+            for (var ce : sortedClasses) {
+                String simpleName = ce.getKey().contains(".")
+                        ? ce.getKey().substring(ce.getKey().lastIndexOf('.') + 1)
+                        : ce.getKey();
+                String fragment = simpleName;
+                if (totalClasses > 1 || ce.getValue() > 1) {
+                    fragment += " (" + ce.getValue() + ")";
+                }
+
+                int remaining = totalClasses - classesShown - 1;
+                String suffix = remaining > 0 ? ", +" + remaining + " more" : "";
+                int projected = classSummary.length() + (classesShown > 0 ? 2 : 0) + fragment.length() + suffix.length();
+
+                if (classesShown > 0 && projected > 44) {
+                    classSummary.append(", +").append(remaining + 1).append(" more");
+                    break;
+                }
+                if (classesShown > 0) classSummary.append(", ");
+                classSummary.append(fragment);
+                classesShown++;
+            }
+
+            System.out.printf("| %4d | %10.4f | %5d | %7d | %-44s |%n",
+                    rank, score, group.size(), cumulativeLines, truncate(classSummary.toString(), 44));
+        }
+        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
+        System.out.printf("%n  * Top-N = cumulative lines to inspect at each rank (for Top-N evaluation).%n");
     }
 
     //timing summary
