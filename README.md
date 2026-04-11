@@ -19,6 +19,7 @@ Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS*
 - [Output Format](#output-format)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
+- [Known Limitations](#known-limitations)
 - [Architecture](#architecture)
 - [License](#license)
 
@@ -338,6 +339,39 @@ The `ochiai-ms` algorithm requires the `-s/--source` flag pointing to your Java 
 ```bash
 javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s src/main/java -o results.csv
 ```
+
+---
+
+## Known Limitations
+
+### Integration tests requiring build-tool processing
+
+Javelin executes compiled test classes directly via JUnit Platform, outside of the build tool lifecycle (Maven/Gradle). Tests that depend on build-time processing — such as annotation processors, code generators, or resource filtering — may fail to initialize. Common examples include:
+
+- Tests relying on **annotation processing** (e.g., picocli, Dagger, MapStruct) that generates metadata during compilation
+- **Integration tests** that require container lifecycle management (e.g., Arquillian, Spring Boot `@SpringBootTest` with embedded servers)
+- Tests that depend on **build-tool plugins** for setup (e.g., generated sources, filtered resources)
+
+To work around this, exclude such test classes from the test classes directory (`-T`) before running Javelin. For example:
+
+```bash
+# Copy test classes and remove integration tests
+cp -r target/test-classes /tmp/my-test-classes
+find /tmp/my-test-classes -name "*IT.class" -delete
+find /tmp/my-test-classes -name "*IT\$*.class" -delete
+```
+
+This is not specific to Javelin — any SBFL tool that runs compiled test classes outside the build tool (e.g., GZoltar) has the same constraint.
+
+### Instrumentation agent conflicts
+
+Javelin uses JaCoCo as its coverage agent. Tests that rely on other Java agents or bytecode manipulation libraries (e.g., ByteBuddy, Mockito inline mocking) may experience conflicts. Symptoms include errors like "Could not modify all classes" or unexpected test failures that don't occur under `mvn test`.
+
+These tests will still be included in the analysis but marked as failed. Since SBFL uses both passing and failing test outcomes, coincidental failures from agent conflicts can inflate the suspiciousness of unrelated code. If many tests fail for reasons unrelated to the actual bug, consider excluding them.
+
+### Tie-heavy rankings
+
+Lines that share identical coverage profiles (i.e., covered by exactly the same set of passing and failing tests) receive the same suspiciousness score. This is inherent to all SBFL techniques, not specific to Javelin. The terminal summary groups tied lines together and reports a Top-N metric showing how many lines a developer would need to inspect at each rank.
 
 ---
 
