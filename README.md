@@ -360,30 +360,41 @@ javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s sr
 
 ## Known Limitations
 
-### Integration tests requiring build-tool processing
+### Prerequisite: project must be compiled first
 
-Javelin executes compiled test classes directly via JUnit Platform, outside of the build tool lifecycle (Maven/Gradle). Tests that depend on build-time processing — such as annotation processors, code generators, or resource filtering — may fail to initialize. Common examples include:
-
-- Tests relying on **annotation processing** (e.g., picocli, Dagger, MapStruct) that generates metadata during compilation
-- **Integration tests** that require container lifecycle management (e.g., Arquillian, Spring Boot `@SpringBootTest` with embedded servers)
-- Tests that depend on **build-tool plugins** for setup (e.g., generated sources, filtered resources)
-
-To work around this, exclude such test classes from the test classes directory (`-T`) before running Javelin. For example:
+Javelin operates on **compiled** `.class` files and does not invoke the build tool. The project must be fully compiled before running Javelin:
 
 ```bash
-# Copy test classes and remove integration tests
+# Maven
+mvn compile test-compile -DskipTests
+
+# Gradle
+./gradlew classes testClasses
+```
+
+This ensures that build-time artifacts are present — including annotation-processor output (e.g., picocli, Dagger, MapStruct metadata), generated sources (ANTLR, Protobuf, JAXB), and filtered resources. Without compilation, tests that depend on these artifacts will fail to initialize.
+
+This is a standard prerequisite for any SBFL tool that runs outside the build lifecycle (e.g., GZoltar standalone mode has the same requirement).
+
+### Container lifecycle / integration tests
+
+Tests that boot embedded servers or application contexts (e.g., Spring Boot `@SpringBootTest`, Arquillian, Testcontainers) depend on build-tool plugin configuration (system properties, port allocation, container management) that Javelin's test runner does not replicate. These tests will typically fail with initialization errors.
+
+**Workaround:** Exclude integration test classes before running Javelin:
+
+```bash
 cp -r target/test-classes /tmp/my-test-classes
 find /tmp/my-test-classes -name "*IT.class" -delete
 find /tmp/my-test-classes -name "*IT\$*.class" -delete
 ```
 
-This is not specific to Javelin — any SBFL tool that runs compiled test classes outside the build tool (e.g., GZoltar) has the same constraint.
+This is a known constraint across SBFL tools — GZoltar's Maven plugin partially mitigates it by running within Maven's test lifecycle, but Arquillian and Failsafe-managed tests remain problematic even there.
 
-### Instrumentation agent conflicts
+### Instrumentation agent conflicts ✅ Resolved
 
 Javelin uses JaCoCo for coverage instrumentation. In **online mode** (default), JaCoCo attaches as a Java agent via `-javaagent`, which can conflict with other agents that also register `ClassFileTransformer`s (e.g., Mockito-inline, ByteBuddy, PowerMock).
 
-Javelin addresses this with **offline instrumentation mode** (see below), which pre-instruments bytecode before test execution so no `-javaagent` flag is needed. Conflicts are auto-detected — if a conflicting JAR is found on the classpath, Javelin switches to offline mode automatically.
+Javelin addresses this with **offline instrumentation mode**, which pre-instruments bytecode before test execution so no `-javaagent` flag is needed. Conflicts are auto-detected — if a conflicting JAR is found on the classpath, Javelin switches to offline mode automatically. See [Offline Instrumentation Mode](#offline-instrumentation-mode) for details.
 
 ---
 
