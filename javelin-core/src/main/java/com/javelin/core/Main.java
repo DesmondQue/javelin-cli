@@ -40,12 +40,12 @@ import picocli.CommandLine.Option;
 @Command(
     name = "javelin",
     mixinStandardHelpOptions = true,
-    version = "javelin-core 1.0.0",
+    version = "javelin-core 1.0.1",
     description = "Automated Spectrum-Based Fault Localization for Java",
     header = {
         "",
         "+===============================================================+",
-        "|                      Javelin Core v1.0.0                      |",
+        "|                      Javelin Core v1.0.1                      |",
         "+===============================================================+",
         ""
     },
