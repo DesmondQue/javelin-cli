@@ -8,8 +8,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.launcher.Launcher;
@@ -102,14 +104,20 @@ public class SingleJvmTestRunner {
         
         LauncherDiscoveryRequestBuilder requestBuilder = LauncherDiscoveryRequestBuilder.request();
         
+        // Use class-level selectors to let JUnit handle method discovery.
+        // This avoids failures with methods that have injected parameters
+        // (e.g., WireMock's WireMockRuntimeInfo) where selectMethod() can't
+        // resolve the no-arg signature.
+        Set<String> classNames = new LinkedHashSet<>();
         for (String testSpec : config.tests) {
             if (testSpec.contains("#")) {
-                //maethod specifier: ClassName#methodName
-                requestBuilder.selectors(DiscoverySelectors.selectMethod(testSpec));
+                classNames.add(testSpec.substring(0, testSpec.indexOf('#')));
             } else {
-                //class specifier: just ClassName
-                requestBuilder.selectors(DiscoverySelectors.selectClass(testSpec));
+                classNames.add(testSpec);
             }
+        }
+        for (String className : classNames) {
+            requestBuilder.selectors(DiscoverySelectors.selectClass(className));
         }
         requestBuilder.configurationParameter("junit.jupiter.execution.parallel.enabled", "false");
         LauncherDiscoveryRequest request = requestBuilder.build();
