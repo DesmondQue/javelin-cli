@@ -22,6 +22,7 @@ import com.javelin.core.mutation.MutationDataParser;
 import com.javelin.core.mutation.MutationRunner;
 import com.javelin.core.parsing.DataParser;
 import com.javelin.core.parsing.MatrixBuilder;
+import com.javelin.core.validation.AgentConflictDetector;
 import com.javelin.core.validation.SbflPreconditions;
 
 import picocli.CommandLine;
@@ -97,6 +98,11 @@ public class Main implements Callable<Integer> {
             description = "Number of parallel threads for test execution (default: CPU core count)")
     private int threadCount = Runtime.getRuntime().availableProcessors();
 
+    @Option(names = {"--offline"}, required = false, order = 7,
+            description = "Use offline bytecode instrumentation instead of a JaCoCo agent. "
+                        + "Avoids conflicts with other Java agents (e.g., Mockito-inline, ByteBuddy).")
+    private boolean offlineMode = false;
+
     public static void main(String[] args) {
         CommandLine cmd = new CommandLine(new Main());
         cmd.setUsageHelpWidth(300);
@@ -137,9 +143,23 @@ public class Main implements Callable<Integer> {
         printInputSummary(totalSteps);
 
         //step 2: run tests with JaCoCo coverage
-        System.out.printf("[2/%d] Running tests with coverage instrumentation...%n", totalSteps);
+        // Auto-detect agent conflicts and switch to offline mode if needed
+        if (!offlineMode) {
+            List<AgentConflictDetector.Conflict> conflicts =
+                    AgentConflictDetector.detect(additionalClasspath);
+            if (!conflicts.isEmpty()) {
+                System.out.printf("  [AUTO] Agent conflict(s) detected on classpath — switching to offline instrumentation mode:%n");
+                for (AgentConflictDetector.Conflict c : conflicts) {
+                    System.out.printf("         • %s: %s%n", c.jarName(), c.reason());
+                }
+                System.out.printf("         (use --offline explicitly to suppress this message)%n%n");
+                offlineMode = true;
+            }
+        }
+        System.out.printf("[2/%d] Running tests with coverage instrumentation%s...%n",
+                totalSteps, offlineMode ? " (offline mode)" : "");
         long testExecStart = System.nanoTime();
-        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, threadCount);
+        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, offlineMode);
         List<TestExecResult> testExecResults = coverageRunner.run();
         long testExecTimeMs = (System.nanoTime() - testExecStart) / 1_000_000;
         

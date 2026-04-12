@@ -1,11 +1,16 @@
 package com.javelin.core.execution;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.jacoco.core.data.ExecutionDataStore;
+import org.jacoco.core.data.ExecutionDataWriter;
 
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestExecutionResult.Status;
@@ -40,12 +45,29 @@ public class JavelinTestListener implements TestExecutionListener {
     /** Directory to write .exec files (optional - can be null for in-memory only) */
     private Path outputDirectory;
 
-    /** JaCoCo IAgent instance obtained reflectively */
+    /** JaCoCo IAgent instance obtained reflectively (online mode) */
     private Object jacocoAgent;
 
-    /** Method handles for JaCoCo agent operations */
+    /** Method handles for JaCoCo agent operations (online mode) */
     private Method resetMethod;
     private Method getExecutionDataMethod;
+
+    /**
+     * Offline mode: shaded RuntimeData instance and reflected method/field handles.
+     * JaCoCo shades its internals with a version-specific hash in the package name
+     * (e.g. org.jacoco.agent.rt.internal_aeaf9ab.*), so we cannot import these types
+     * directly. All access is via pure reflection.
+     */
+    private Object offlineShadedRuntime;     // shaded core.runtime.RuntimeData instance
+    private Method offlineResetMethod;        // RuntimeData.reset()
+    private Field  offlineStoreField;         // RuntimeData.store (ExecutionDataStore)
+    private Method offlineGetContentsMethod;  // ExecutionDataStore.getContents()
+    private Method offlineGetIdMethod;        // ExecutionData.getId()
+    private Method offlineGetNameMethod;      // ExecutionData.getName()
+    private Method offlineGetProbesMethod;    // ExecutionData.getProbes()
+
+    /** Flag indicating whether offline instrumentation mode is active */
+    private boolean offlineDataMode = false;
 
     /** Flag indicating whether JaCoCo agent is available */
     private boolean agentAvailable = false;
@@ -69,30 +91,99 @@ public class JavelinTestListener implements TestExecutionListener {
 
     /**
      * Initializes the JaCoCo agent connection using reflection.
-     * This avoids compile-time dependency on jacoco-agent-rt.
+     * Detects online vs offline mode via the javelin.offline system property.
+     * - Online mode:  RT.getAgent() — standard JaCoCo agent attached via -javaagent
+     * - Offline mode: Offline.RUNTIME (RuntimeData) — accessed via the javelin.offline.class property
      */
     private void initializeJacocoAgent() {
+        if (Boolean.getBoolean("javelin.offline")) {
+            initializeOfflineRuntime();
+        } else {
+            initializeOnlineAgent();
+        }
+    }
+
+    /**
+     * Online mode: access JaCoCo through the attached agent (RT.getAgent()).
+     */
+    private void initializeOnlineAgent() {
         try {
-            //access JaCoCo RT class which provides the agent instance
             Class<?> rtClass = Class.forName("org.jacoco.agent.rt.RT");
-            
-            //get agent instance via RT.getAgent()
             Method getAgentMethod = rtClass.getMethod("getAgent");
             jacocoAgent = getAgentMethod.invoke(null);
-            
-            //get method handles for reset() and getExecutionData(boolean)
             Class<?> agentClass = jacocoAgent.getClass();
             resetMethod = agentClass.getMethod("reset");
             getExecutionDataMethod = agentClass.getMethod("getExecutionData", boolean.class);
-            
             agentAvailable = true;
             System.out.println("      JaCoCo agent connected successfully");
-            
         } catch (ClassNotFoundException e) {
             System.err.println("      WARNING: JaCoCo agent not found. Ensure JVM is started with -javaagent:jacocoagent.jar");
             agentAvailable = false;
         } catch (Exception e) {
             System.err.println("      WARNING: Failed to initialize JaCoCo agent: " + e.getMessage());
+            agentAvailable = false;
+        }
+    }
+
+    /**
+     * Offline mode: access coverage data from the shaded JaCoCo Offline class.
+     *
+     * The jacocoagent.jar shades all internals under a hash-suffixed package, e.g.
+     *   org.jacoco.agent.rt.internal_aeaf9ab.Offline
+     *   org.jacoco.agent.rt.internal_aeaf9ab.core.runtime.RuntimeData
+     *   org.jacoco.agent.rt.internal_aeaf9ab.core.data.ExecutionData
+     *
+     * CoverageRunner scans jacocoagent.jar to find the exact class name and passes it
+     * as the javelin.offline.class system property. All accesses are via reflection.
+     *
+     * Data flow per test:
+     *   executionStarted  → RuntimeData.reset() clears accumulated probe bits
+     *   test runs         → instrumented classes flip probe bits via Offline.getProbes()
+     *   executionFinished → iterate RuntimeData.store.getContents(), translate to public
+     *                        org.jacoco.core.data.ExecutionData, serialise with
+     *                        ExecutionDataWriter to standard JaCoCo binary format
+     */
+    private void initializeOfflineRuntime() {
+        String offlineClassName = System.getProperty("javelin.offline.class");
+        if (offlineClassName == null || offlineClassName.isBlank()) {
+            System.err.println("      WARNING: javelin.offline.class property not set; offline coverage unavailable");
+            agentAvailable = false;
+            return;
+        }
+        try {
+            // e.g. offlineClassName = "org.jacoco.agent.rt.internal_aeaf9ab.Offline"
+            // internalPkg           = "org.jacoco.agent.rt.internal_aeaf9ab"
+            String internalPkg = offlineClassName.substring(0, offlineClassName.lastIndexOf('.'));
+
+            // Get the Offline class and call its private getRuntimeData() to ensure the
+            // static RuntimeData instance is initialised before any tests run.
+            Class<?> offlineClass = Class.forName(offlineClassName);
+            Method getRTDataMethod = offlineClass.getDeclaredMethod("getRuntimeData");
+            getRTDataMethod.setAccessible(true);
+            offlineShadedRuntime = getRTDataMethod.invoke(null);
+
+            // RuntimeData.reset() — clears all probe bits
+            offlineResetMethod = offlineShadedRuntime.getClass().getMethod("reset");
+
+            // RuntimeData.store (protected final ExecutionDataStore) — holds probe data
+            offlineStoreField = offlineShadedRuntime.getClass().getDeclaredField("store");
+            offlineStoreField.setAccessible(true);
+
+            // ExecutionDataStore.getContents() — returns Collection<ExecutionData>
+            Class<?> storeClass = Class.forName(internalPkg + ".core.data.ExecutionDataStore");
+            offlineGetContentsMethod = storeClass.getMethod("getContents");
+
+            // ExecutionData accessors — same semantics as public JaCoCo API
+            Class<?> execDataClass = Class.forName(internalPkg + ".core.data.ExecutionData");
+            offlineGetIdMethod     = execDataClass.getMethod("getId");
+            offlineGetNameMethod   = execDataClass.getMethod("getName");
+            offlineGetProbesMethod = execDataClass.getMethod("getProbes");
+
+            offlineDataMode = true;
+            agentAvailable  = true;
+            System.out.println("      JaCoCo offline runtime connected successfully (" + offlineClassName + ")");
+        } catch (Exception e) {
+            System.err.println("      WARNING: Failed to initialize JaCoCo offline runtime: " + e.getMessage());
             agentAvailable = false;
         }
     }
@@ -135,7 +226,11 @@ public class JavelinTestListener implements TestExecutionListener {
 
         if (agentAvailable) {
             try {
-                resetMethod.invoke(jacocoAgent);
+                if (offlineDataMode) {
+                    offlineResetMethod.invoke(offlineShadedRuntime);
+                } else {
+                    resetMethod.invoke(jacocoAgent);
+                }
             } catch (Exception e) {
                 System.err.println("      WARNING: Failed to reset JaCoCo coverage: " + e.getMessage());
             }
@@ -158,7 +253,27 @@ public class JavelinTestListener implements TestExecutionListener {
 
         if (agentAvailable) {
             try {
-                byte[] data = (byte[]) getExecutionDataMethod.invoke(jacocoAgent, false);
+                byte[] data;
+                if (offlineDataMode) {
+                    // Translate shaded ExecutionData entries to public equivalents, then
+                    // serialise to standard JaCoCo binary format (same as online getExecutionData).
+                    Object shadedStore = offlineStoreField.get(offlineShadedRuntime);
+                    @SuppressWarnings("unchecked")
+                    java.util.Collection<Object> contents =
+                            (java.util.Collection<Object>) offlineGetContentsMethod.invoke(shadedStore);
+                    ExecutionDataStore publicStore = new ExecutionDataStore();
+                    for (Object entry : contents) {
+                        long    id     = (long)    offlineGetIdMethod.invoke(entry);
+                        String  name   = (String)  offlineGetNameMethod.invoke(entry);
+                        boolean[] probes = (boolean[]) offlineGetProbesMethod.invoke(entry);
+                        publicStore.put(new org.jacoco.core.data.ExecutionData(id, name, probes));
+                    }
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    publicStore.accept(new ExecutionDataWriter(bos));
+                    data = bos.toByteArray();
+                } else {
+                    data = (byte[]) getExecutionDataMethod.invoke(jacocoAgent, false);
+                }
                 
                 if (data != null && data.length > 0) {
                     coverageData.put(testId, data);

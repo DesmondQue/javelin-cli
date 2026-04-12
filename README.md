@@ -17,6 +17,7 @@ Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS*
 - [Command Reference](#command-reference)
 - [Algorithms](#algorithms)
 - [Output Format](#output-format)
+- [Offline Instrumentation Mode](#offline-instrumentation-mode)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Known Limitations](#known-limitations)
@@ -43,7 +44,7 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 
 > **Note:** Any Java 21+ JDK works (Temurin, Oracle, Corretto, GraalVM, etc.). Ensure `java -version` reports 21 or higher, or set `JAVA_HOME` to your JDK 21 installation.
 
-> **⚠️ Agent Compatibility:** Javelin uses [JaCoCo](https://www.jacoco.org/) for coverage instrumentation. Projects whose tests rely on other bytecode manipulation agents (e.g., ByteBuddy, Mockito inline mocking) may experience agent conflicts, causing some tests to fail with errors like "Could not modify all classes." These tests will still be included in the analysis but will be marked as failed, which can affect ranking accuracy. See [Known Limitations](#known-limitations) for details.
+> **Agent Compatibility:** Javelin uses [JaCoCo](https://www.jacoco.org/) for coverage instrumentation. Projects whose tests rely on other bytecode manipulation agents (e.g., ByteBuddy, Mockito inline mocking) are automatically detected and handled via **offline instrumentation mode**, which pre-instruments bytecode to avoid agent conflicts. You can also force this mode with `--offline`. See [Offline Instrumentation Mode](#offline-instrumentation-mode) for details.
 
 ---
 
@@ -140,6 +141,18 @@ javelin -t build/classes/java/main \
   -o report.csv
 ```
 
+**Force offline instrumentation** (for projects with agent conflicts):
+
+```bash
+javelin --offline \
+  -t build/classes/java/main \
+  -T build/classes/java/test \
+  -c "$(cat /tmp/classpath.txt)" \
+  -o report.csv
+```
+
+> **Note:** If Mockito-inline, ByteBuddy agent, PowerMock, JMockit, or AspectJ weaver JARs are detected on the classpath, Javelin automatically switches to offline mode — no `--offline` flag needed.
+
 ---
 
 ## Command Reference
@@ -155,6 +168,7 @@ javelin -t build/classes/java/main \
 | `-s` | `--source` | Only for `ochiai-ms` | — | Path to Java source files (needed by PITest for mutation analysis) |
 | `-c` | `--classpath` | No | — | Additional classpath entries (JARs or directories) |
 | `-j` | `--threads` | No | CPU core count | Number of parallel threads for test execution |
+| | `--offline` | No | `false` | Use offline bytecode instrumentation instead of a JaCoCo agent. Avoids conflicts with other Java agents (e.g., Mockito-inline, ByteBuddy). Auto-enabled when conflicts are detected on the classpath. |
 | `-h` | `--help` | — | — | Show help message and exit |
 | `-V` | `--version` | — | — | Print version information and exit |
 
@@ -367,9 +381,58 @@ This is not specific to Javelin — any SBFL tool that runs compiled test classe
 
 ### Instrumentation agent conflicts
 
-Javelin uses JaCoCo as its coverage agent. Tests that rely on other Java agents or bytecode manipulation libraries (e.g., ByteBuddy, Mockito inline mocking) may experience conflicts. Symptoms include errors like "Could not modify all classes" or unexpected test failures that don't occur under `mvn test`.
+Javelin uses JaCoCo for coverage instrumentation. In **online mode** (default), JaCoCo attaches as a Java agent via `-javaagent`, which can conflict with other agents that also register `ClassFileTransformer`s (e.g., Mockito-inline, ByteBuddy, PowerMock).
 
-These tests will still be included in the analysis but marked as failed. Since SBFL uses both passing and failing test outcomes, coincidental failures from agent conflicts can inflate the suspiciousness of unrelated code. If many tests fail for reasons unrelated to the actual bug, consider excluding them.
+Javelin addresses this with **offline instrumentation mode** (see below), which pre-instruments bytecode before test execution so no `-javaagent` flag is needed. Conflicts are auto-detected — if a conflicting JAR is found on the classpath, Javelin switches to offline mode automatically.
+
+---
+
+## Offline Instrumentation Mode
+
+Offline mode pre-instruments compiled `.class` files using JaCoCo's offline API before running tests, eliminating the need for the `-javaagent` flag entirely. This avoids conflicts with other Java agents.
+
+### How it works
+
+1. Javelin copies target classes to a temporary directory
+2. Each `.class` file is instrumented with JaCoCo probes via the `Instrumenter` API
+3. Tests run against the pre-instrumented classes — no Java agent is attached
+4. Per-test coverage data is collected via JaCoCo's `Offline` runtime class
+5. The temporary directory is cleaned up automatically after execution
+
+The original target classes directory is **never modified**.
+
+### Auto-detection
+
+Javelin automatically scans the classpath (`-c`) for JARs that indicate agent conflicts:
+
+| JAR Pattern | Library |
+|---|---|
+| `mockito-inline-*.jar` | Mockito inline mocking (uses ByteBuddy internally) |
+| `byte-buddy-agent-*.jar` | ByteBuddy agent |
+| `powermock-agent-*.jar` | PowerMock |
+| `jmockit-*.jar` | JMockit |
+| `aspectjweaver-*.jar` | AspectJ load-time weaving |
+
+When conflicts are detected, Javelin prints a message and switches to offline mode:
+
+```
+[AUTO] Agent conflict(s) detected on classpath — switching to offline instrumentation mode:
+       • mockito-inline-5.2.0.jar: Mockito-inline uses ByteBuddy for bytecode rewriting...
+       • byte-buddy-agent-1.14.1.jar: ByteBuddy agent registers its own ClassFileTransformer...
+       (use --offline explicitly to suppress this message)
+```
+
+### Manual activation
+
+Force offline mode with the `--offline` flag:
+
+```bash
+javelin --offline -t target/classes -T target/test-classes -c "$(cat /tmp/cp.txt)" -o report.csv
+```
+
+### Correctness
+
+Offline mode produces **identical** fault localization results to online mode. The same JaCoCo probes are injected — only the injection timing differs (build-time vs. load-time).
 
 ### Tie-heavy rankings
 
@@ -388,7 +451,8 @@ CLI Input → Coverage Collection → Data Parsing → Matrix Building → SBFL 
 | Layer | Components | Responsibility |
 |---|---|---|
 | **Controller** | `Main.java` | CLI parsing (Picocli), input validation, pipeline orchestration |
-| **Execution** | `CoverageRunner` | JaCoCo-instrumented test execution with parallel thread support |
+| **Execution** | `CoverageRunner`, `OfflineInstrumenter` | JaCoCo-instrumented test execution (online agent or offline pre-instrumentation) |
+| **Validation** | `SbflPreconditions`, `AgentConflictDetector` | SBFL precondition checks and agent conflict auto-detection |
 | **Data Processing** | `DataParser`, `MatrixBuilder` | Parse `.exec` coverage files, build spectrum hit matrix |
 | **Math** | `OchiaiCalculator`, `OchiaiMSCalculator` | Compute suspiciousness scores |
 | **Mutation** *(ochiai-ms only)* | `MutationRunner`, `MutationScoreCalculator` | Scoped PITest analysis and per-test mutation scoring |

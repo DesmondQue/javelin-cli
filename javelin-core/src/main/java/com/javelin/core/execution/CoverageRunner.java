@@ -35,7 +35,8 @@ import com.javelin.core.model.TestExecResult;
  * 
  * Design Notes:
  * - uses ProcessBuilder (via ProcessExecutor) to launch tests in a new JVM
- * - jacoci agent is attached via -javaagent argument
+ * - online mode: JaCoCo agent attached via -javaagent argument
+ * - offline mode: classes pre-instrumented by OfflineInstrumenter; no -javaagent needed
  * - supports both JUnit 4 (Vintage) and JUnit 5 (Jupiter) tests
  */
 public class CoverageRunner {
@@ -44,20 +45,26 @@ public class CoverageRunner {
     private final Path testPath;
     private final String additionalClasspath;
     private final ProcessExecutor processExecutor;
+    private final boolean offlineMode;
 
     private Path tempDir;
     private Path jacocoAgentJar;
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath) {
+        this(targetPath, testPath, additionalClasspath, false);
+    }
+
+    public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.additionalClasspath = additionalClasspath;
+        this.offlineMode = offlineMode;
         this.processExecutor = new ProcessExecutor();
     }
 
     /**
      * @deprecated threadCount is no longer used since all tests run in a single JVM.
-     *             Use {@link #CoverageRunner(Path, Path, String)} instead.
+     *             Use {@link #CoverageRunner(Path, Path, String, boolean)} instead.
      */
     @Deprecated
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, int threadCount) {
@@ -184,78 +191,136 @@ public class CoverageRunner {
             return new ArrayList<>();
         }
         
-        System.out.println("      Executing all tests in single JVM fork...");
-        
-        // Build arguments for SingleJvmTestRunner
-        List<String> javaArgs = buildSingleJvmRunnerArgs(classpath, testSpecifiers);
-        
-        // Execute single JVM process with all tests
-        ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
-                javaArgs, 
-                tempDir, 
-                null,
-                600 // 10 minute timeout for all tests
-        );
-        
-        // Print output
-        if (!result.stdout().isBlank()) {
-            System.out.println(result.stdout());
-        }
-        if (!result.stderr().isBlank()) {
-            // Filter line-by-line: only suppress JVM delegation warnings, not all errors
-            for (String line : result.stderr().split("\\R")) {
-                if (!line.isBlank() && !line.contains("WARNING: Delegated")) {
-                    System.err.println(line);
+        System.out.println("      Executing all tests in single JVM fork" + (offlineMode ? " (offline instrumentation)" : "") + "...");
+
+        // In offline mode, pre-instrument a copy of the target classes into a temp dir
+        // and substitute it on the classpath so no -javaagent is needed.
+        // 4.2: The original targetPath is NEVER modified — instrumentation is done in a
+        // separate temp directory, so no backup/restore is required.
+        Path instrumentedTempDir = null;
+        Path effectiveTargetPath = targetPath;
+        try {
+            if (offlineMode) {
+                System.out.println("      Instrumenting classes offline...");
+                OfflineInstrumenter offlineInstrumenter = new OfflineInstrumenter();
+                instrumentedTempDir = offlineInstrumenter.instrumentIntoTempDir(targetPath);
+                effectiveTargetPath = instrumentedTempDir;
+                System.out.println("      Offline-instrumented classes written to: " + effectiveTargetPath);
+            }
+
+            // Build arguments for SingleJvmTestRunner
+            List<String> javaArgs = buildSingleJvmRunnerArgs(classpath, testSpecifiers, effectiveTargetPath);
+
+            // Execute single JVM process with all tests
+            ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
+                    javaArgs,
+                    tempDir,
+                    null,
+                    600 // 10 minute timeout for all tests
+            );
+
+            // Print output
+            if (!result.stdout().isBlank()) {
+                System.out.println(result.stdout());
+            }
+            if (!result.stderr().isBlank()) {
+                // Filter line-by-line: only suppress JVM delegation warnings, not all errors
+                for (String line : result.stderr().split("\\R")) {
+                    if (!line.isBlank() && !line.contains("WARNING: Delegated")) {
+                        System.err.println(line);
+                    }
                 }
             }
-        }
-        
-        // Check subprocess exit code
-        if (result.timedOut()) {
-            System.err.println("      ERROR: Subprocess timed out after 600 seconds");
-        } else if (result.exitCode() != 0 && result.exitCode() != 1) {
-            // 0 = all tests passed, 1 = some tests failed (both are valid)
-            System.err.println("      WARNING: Subprocess exited with unexpected code: " + result.exitCode());
-        }
-        
-        // List temp directory contents for diagnostic purposes
-        try (var stream = Files.list(tempDir)) {
-            List<Path> tempFiles = stream.toList();
-            System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
-            for (Path f : tempFiles) {
-                System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");
+
+            // Check subprocess exit code
+            if (result.timedOut()) {
+                System.err.println("      ERROR: Subprocess timed out after 600 seconds");
+            } else if (result.exitCode() != 0 && result.exitCode() != 1) {
+                // 0 = all tests passed, 1 = some tests failed (both are valid)
+                System.err.println("      WARNING: Subprocess exited with unexpected code: " + result.exitCode());
             }
-        } catch (IOException e) {
-            System.err.println("      WARNING: Could not list temp directory: " + e.getMessage());
+
+            // List temp directory contents for diagnostic purposes
+            try (var stream = Files.list(tempDir)) {
+                List<Path> tempFiles = stream.toList();
+                System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
+                for (Path f : tempFiles) {
+                    System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");
+                }
+            } catch (IOException e) {
+                System.err.println("      WARNING: Could not list temp directory: " + e.getMessage());
+            }
+
+            // Collect results from output directory
+            List<TestExecResult> results = collectResults(testSpecifiers);
+
+            long passedCount = results.stream().filter(TestExecResult::passed).count();
+            long failedCount = results.size() - passedCount;
+            System.out.println("      Total: " + results.size() + " test(s) - " + passedCount + " passed, " + failedCount + " failed");
+
+            return results;
+        } finally {
+            // 4.1: Proactively clean up the instrumented temp dir on both normal exit and
+            // exceptions (e.g., IOException from processExecutor). The shutdown hook
+            // registered in instrumentIntoTempDir() still covers hard JVM crashes.
+            deleteInstrumentedTempDir(instrumentedTempDir);
         }
-        
-        // Collect results from output directory
-        List<TestExecResult> results = collectResults(testSpecifiers);
-        
-        long passedCount = results.stream().filter(TestExecResult::passed).count();
-        long failedCount = results.size() - passedCount;
-        System.out.println("      Total: " + results.size() + " test(s) - " + passedCount + " passed, " + failedCount + " failed");
-        
-        return results;
     }
 
     /**
      * Builds Java arguments for the SingleJvmTestRunner.
+     *
+     * In online mode, prepends the JaCoCo -javaagent flag.
+     * In offline mode, the target classes are already instrumented; the JaCoCo runtime
+     * JAR is already on the classpath (via buildClasspath), so no -javaagent is needed.
+     *
+     * @param classpath       the base classpath (built from the original targetPath)
+     * @param testSpecifiers  list of className#methodName test specifiers
+     * @param effectiveTarget the directory containing (possibly instrumented) target classes;
+     *                        in offline mode this differs from targetPath
      */
-    private List<String> buildSingleJvmRunnerArgs(String classpath, List<String> testSpecifiers) {
+    private List<String> buildSingleJvmRunnerArgs(String classpath, List<String> testSpecifiers, Path effectiveTarget) {
         List<String> args = new ArrayList<>();
 
-        // JaCoCo agent - note: coverage is collected per-test via JavelinTestListener
-        // The agent destfile is not used directly; per-test .exec files are written by the listener
-        String jacocoAgent = String.format(
-                "-javaagent:%s=destfile=%s,includes=*,excludes=org.junit.*:org.jacoco.*",
-                jacocoAgentJar.toAbsolutePath(),
-                tempDir.resolve("jacoco-all.exec").toAbsolutePath()
-        );
-        args.add(jacocoAgent);
-        
-        args.add("-cp");
-        args.add(classpath);
+        if (offlineMode) {
+            // Rebuild classpath: replace original targetPath entry with the instrumented dir.
+            // Do not use String.replace() — it produces a double separator when targetPath is
+            // at the start of the classpath (replaces to empty string, leaving "::").
+            String separator = ProcessExecutor.getPathSeparator();
+            String targetAbsolute = targetPath.toAbsolutePath().toString();
+            StringBuilder instrumentedCp = new StringBuilder(effectiveTarget.toAbsolutePath().toString());
+            for (String entry : classpath.split(java.util.regex.Pattern.quote(separator), -1)) {
+                if (!entry.isBlank() && !entry.equals(targetAbsolute)) {
+                    instrumentedCp.append(separator).append(entry);
+                }
+            }
+            // 4.3: Explicitly add the JaCoCo runtime JAR so the Offline class is loadable
+            // regardless of whether Javelin is invoked from a fat JAR or from source.
+            // The shutdown hook registered by setupTempDirectory() keeps jacocoAgentJar alive
+            // until after the forked JVM process exits.
+            if (jacocoAgentJar != null && Files.exists(jacocoAgentJar)) {
+                instrumentedCp.append(separator).append(jacocoAgentJar.toAbsolutePath());
+            }
+            // Signal offline mode and provide the obfuscated Offline class name to the forked JVM
+            args.add("-Djavelin.offline=true");
+            String offlineClass = findOfflineRuntimeClassName();
+            if (offlineClass != null) {
+                args.add("-Djavelin.offline.class=" + offlineClass);
+            }
+            args.add("-cp");
+            args.add(instrumentedCp.toString());
+        } else {
+            // Online mode: attach JaCoCo agent
+            // The agent destfile is not used directly; per-test .exec files are written by the listener
+            String jacocoAgent = String.format(
+                    "-javaagent:%s=destfile=%s,includes=*,excludes=org.junit.*:org.jacoco.*",
+                    jacocoAgentJar.toAbsolutePath(),
+                    tempDir.resolve("jacoco-all.exec").toAbsolutePath()
+            );
+            args.add(jacocoAgent);
+            args.add("-cp");
+            args.add(classpath);
+        }
         
         // Main class: SingleJvmTestRunner
         args.add("com.javelin.core.execution.SingleJvmTestRunner");
@@ -269,6 +334,31 @@ public class CoverageRunner {
         args.addAll(testSpecifiers);
 
         return args;
+    }
+
+    /**
+     * Scans the extracted jacocoagent.jar to find the obfuscated internal Offline class name.
+     * JaCoCo shades its runtime with a version-specific hash in the package name, e.g.:
+     *   org/jacoco/agent/rt/internal_3a46b200/Offline.class
+     * The class name is needed so JavelinTestListener can access the RuntimeData in offline mode.
+     *
+     * @return dotted class name (e.g. org.jacoco.agent.rt.internal_3a46b200.Offline), or null if not found
+     */
+    private String findOfflineRuntimeClassName() {
+        if (jacocoAgentJar == null || !Files.exists(jacocoAgentJar)) {
+            return null;
+        }
+        try (JarFile jar = new JarFile(jacocoAgentJar.toFile())) {
+            return jar.stream()
+                    .map(java.util.jar.JarEntry::getName)
+                    .filter(n -> n.endsWith("/Offline.class") && n.startsWith("org/jacoco/agent/rt/"))
+                    .findFirst()
+                    .map(n -> n.replace('/', '.').replace(".class", ""))
+                    .orElse(null);
+        } catch (IOException e) {
+            System.err.println("      WARNING: Could not scan jacocoagent.jar for Offline class: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -457,6 +547,38 @@ public class CoverageRunner {
         }
 
         return cp.toString();
+    }
+
+    /**
+     * 4.1: Proactively deletes the instrumented temp directory created by
+     * {@link OfflineInstrumenter#instrumentIntoTempDir}. Called from a finally block in
+     * {@link #run()} so cleanup happens immediately on normal exit or exception, without
+     * having to wait for JVM shutdown (the shutdown hook in OfflineInstrumenter is the
+     * last-resort safety net for hard crashes / SIGKILL).
+     *
+     * @param dir the instrumented temp directory to delete, or null (no-op)
+     */
+    private void deleteInstrumentedTempDir(Path dir) {
+        if (dir == null || !Files.exists(dir)) {
+            return;
+        }
+        try {
+            Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.deleteIfExists(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path d, IOException exc) throws IOException {
+                    Files.deleteIfExists(d);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("      WARNING: Could not clean up instrumented temp dir " + dir + ": " + e.getMessage());
+        }
     }
 
     /**
