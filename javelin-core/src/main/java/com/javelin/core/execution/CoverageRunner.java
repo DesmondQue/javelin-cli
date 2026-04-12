@@ -214,7 +214,7 @@ public class CoverageRunner {
             // Execute single JVM process with all tests
             ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
                     javaArgs,
-                    tempDir,
+                    Path.of(System.getProperty("user.dir")),
                     null,
                     600 // 10 minute timeout for all tests
             );
