@@ -374,21 +374,25 @@ mvn compile test-compile -DskipTests
 
 This ensures that build-time artifacts are present — including annotation-processor output (e.g., picocli, Dagger, MapStruct metadata), generated sources (ANTLR, Protobuf, JAXB), and filtered resources. Without compilation, tests that depend on these artifacts will fail to initialize.
 
-This is a standard prerequisite for any SBFL tool that runs outside the build lifecycle (e.g., GZoltar standalone mode has the same requirement).
+This is a standard prerequisite for any SBFL tool that runs compiled test classes outside the build lifecycle.
 
-### Container lifecycle / integration tests
+### Tests requiring build-tool orchestrated infrastructure
 
-Tests that boot embedded servers or application contexts (e.g., Spring Boot `@SpringBootTest`, Arquillian, Testcontainers) depend on build-tool plugin configuration (system properties, port allocation, container management) that Javelin's test runner does not replicate. These tests will typically fail with initialization errors.
+Javelin runs compiled test classes directly via JUnit Platform. Most tests — including unit tests, integration tests, and self-contained framework tests (e.g., Spring Boot `@SpringBootTest`, Testcontainers) — work correctly as long as all required JARs are on the classpath via `-c`.
 
-**Workaround:** Exclude integration test classes before running Javelin:
+Tests that **will not work** are those requiring the build tool to manage external infrastructure around test execution:
+
+- **Arquillian** tests that depend on Maven Failsafe to start/stop an application server (WildFly, Tomcat) during `pre-integration-test` / `post-integration-test` phases
+- Tests relying on **system properties injected by Surefire/Failsafe** plugin configuration (`<systemPropertyVariables>`, `<argLine>`) that Javelin does not replicate
+- Tests managed by **Maven Failsafe** that require its lifecycle phases for setup/teardown (port allocation, external service orchestration)
+
+**Workaround:** Exclude these test classes before running Javelin:
 
 ```bash
 cp -r target/test-classes /tmp/my-test-classes
 find /tmp/my-test-classes -name "*IT.class" -delete
 find /tmp/my-test-classes -name "*IT\$*.class" -delete
 ```
-
-This is a known constraint across SBFL tools — GZoltar's Maven plugin partially mitigates it by running within Maven's test lifecycle, but Arquillian and Failsafe-managed tests remain problematic even there.
 
 ### Instrumentation agent conflicts ✅ Resolved
 
