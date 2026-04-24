@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.javelin"
-version = "1.1.0"
+version = "1.1.0-beta"
 
 java {
     toolchain {
@@ -235,6 +235,10 @@ tasks.register("updateHomebrew") {
         var content = formula.readText()
         content = content.replace(Regex("version \"[^\"]+\""), "version \"${releaseVersion}\"")
         content = content.replace(Regex("sha256 \"[^\"]+\""), "sha256 \"${sha}\"")
+        content = content.replace(
+            Regex("url \"[^\"]+\""),
+            "url \"https://github.com/DesmondQue/javelin-cli/releases/download/v${releaseVersion}/javelin-cli-${releaseVersion}.tar\""
+        )
         formula.writeText(content)
 
         println("Updated Formula/javelin-cli.rb → version=${releaseVersion}, sha256=${sha}")
