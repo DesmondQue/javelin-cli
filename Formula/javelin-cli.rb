@@ -1,9 +1,9 @@
 class JavelinCli < Formula
   desc "Automated Spectrum-Based Fault Localization for Java"
   homepage "https://github.com/DesmondQue/javelin-cli"
-  version "1.0.1"
-  url "https://github.com/DesmondQue/javelin-cli/releases/download/v1.0.1-beta/javelin-cli-1.0.1.tar"
-  sha256 "6bd350c7531aa17bac207deb70955fa2e718406c011c1a8b96016e192ff86131"
+  version "1.1.0"
+  url "https://github.com/DesmondQue/javelin-cli/releases/download/v1.1.0/javelin-cli-1.1.0.tar"
+  sha256 "ae3edb56f90d59f4dd80ca0b6ec01ec55577094da416499a334b677fb7abe491"
   license "MIT"
 
   def install

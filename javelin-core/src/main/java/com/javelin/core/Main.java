@@ -1,5 +1,6 @@
 package com.javelin.core;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -8,11 +9,13 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import com.javelin.core.execution.CoverageRunner;
+import com.javelin.core.export.ConsoleReporter;
 import com.javelin.core.export.CsvExporter;
 import com.javelin.core.math.MutationScoreCalculator;
 import com.javelin.core.math.OchiaiCalculator;
 import com.javelin.core.math.OchiaiMSCalculator;
 import com.javelin.core.model.CoverageData;
+import com.javelin.core.model.ExitCode;
 import com.javelin.core.model.MutationData;
 import com.javelin.core.model.SpectrumMatrix;
 import com.javelin.core.model.SuspiciousnessResult;
@@ -40,72 +43,81 @@ import picocli.CommandLine.Option;
 @Command(
     name = "javelin",
     mixinStandardHelpOptions = true,
-    version = "javelin-core 1.0.1",
+    sortOptions = false,
+    versionProvider = VersionProvider.class,
+    customSynopsis = {
+        "javelin -t <dir> -T <dir> -o <file> [OPTIONS]"
+    },
     description = "Automated Spectrum-Based Fault Localization for Java",
     header = {
         "",
-        "+===============================================================+",
-        "|                      Javelin Core v1.0.1                      |",
-        "+===============================================================+",
+        "+==================================================+",
+        "|                   Javelin Core                    |",
+        "+==================================================+",
         ""
     },
     descriptionHeading = "%n",
-    parameterListHeading = "%nParameters:%n",
     optionListHeading = "%nOptions:%n",
     footer = {
         "",
         "Algorithms:",
-        "  ochiai      Standard Ochiai SBFL (default). Ranks lines by suspiciousness",
-        "              using pass/fail test spectrum data.",
-        "  ochiai-ms   Ochiai with Mutation Score weighting. Weights passing tests",
-        "              by their mutation-killing strength using scoped PITest analysis.",
+        "  ochiai      Ochiai SBFL (default)",
+        "  ochiai-ms   Ochiai weighted by mutation score (needs -s)",
         "",
         "Examples:",
-        "  javelin -a ochiai -t build/classes/java/main -T build/classes/java/test -o report.csv",
-        "  javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s src/main/java -o results.csv",
+        "  javelin -t classes/main -T classes/test -o report.csv",
+        "  javelin -a ochiai-ms -t classes/main -T classes/test",
+        "          -s src/main/java -o results.csv",
         "",
-        "SBFL: requires >=1 failing test; 0 passing tests is allowed (lower ranking quality).",
+        "Requires >=1 failing test.",
         ""
     }
 )
 public class Main implements Callable<Integer> {
 
-    @Option(names = {"-a", "--algorithm"}, required = false, paramLabel = "<name>", order = 0,
-            description = "Fault localization algorithm: ochiai (default) or ochiai-ms")
-    private String algorithm = "ochiai";
-
-    @Option(names = {"-t", "--target"}, required = true, paramLabel = "<dir>", order = 1,
-            description = "Path to compiled classes")
+    @Option(names = {"-t", "--target"}, required = true, paramLabel = "<dir>", order = 0,
+            description = "Compiled classes directory")
     private Path targetPath;
 
-    @Option(names = {"-T", "--test"}, required = true, paramLabel = "<dir>", order = 2,
-            description = "Path to test classes")
+    @Option(names = {"-T", "--test"}, required = true, paramLabel = "<dir>", order = 1,
+            description = "Test classes directory")
     private Path testPath;
 
-    @Option(names = {"-o", "--output"}, required = true, paramLabel = "<file>", order = 3,
+    @Option(names = {"-o", "--output"}, required = true, paramLabel = "<file>", order = 2,
             description = "Output CSV file path")
     private Path outputPath;
 
+    @Option(names = {"-a", "--algorithm"}, required = false, paramLabel = "<name>", order = 3,
+            description = "ochiai (default) or ochiai-ms")
+    private String algorithm = "ochiai";
+
     @Option(names = {"-s", "--source"}, required = false, paramLabel = "<dir>", order = 4,
-            description = "Source files path (required for ochiai-ms)")
+            description = "Source directory (required for ochiai-ms)")
     private Path sourcePath;
 
     @Option(names = {"-c", "--classpath"}, required = false, paramLabel = "<path>", order = 5,
-            description = "Additional classpath")
+            description = "Additional classpath entries")
     private String additionalClasspath;
 
     @Option(names = {"-j", "--threads"}, required = false, paramLabel = "<count>", order = 6,
-            description = "Number of parallel threads for test execution (default: CPU core count)")
+            description = "Parallel threads (default: CPU cores)")
     private int threadCount = Runtime.getRuntime().availableProcessors();
 
     @Option(names = {"--offline"}, required = false, order = 7,
-            description = "Use offline bytecode instrumentation instead of a JaCoCo agent. "
-                        + "Avoids conflicts with other Java agents (e.g., Mockito-inline, ByteBuddy).")
+            description = "Use offline instrumentation (avoids agent conflicts)")
     private boolean offlineMode = false;
+
+    @Option(names = {"-q", "--quiet"}, required = false, order = 8,
+            description = "Suppress progress output")
+    private boolean quiet = false;
+
+    private void progress(String msg) {
+        if (!quiet) System.err.printf("[javelin] %s%n", msg);
+    }
 
     public static void main(String[] args) {
         CommandLine cmd = new CommandLine(new Main());
-        cmd.setUsageHelpWidth(300);
+        cmd.setUsageHelpAutoWidth(true);
         int exitCode = cmd.execute(args);
         System.exit(exitCode);
     }
@@ -120,27 +132,32 @@ public class Main implements Callable<Integer> {
         String algo = algorithm.toLowerCase().trim();
         if (!algo.equals("ochiai") && !algo.equals("ochiai-ms")) {
             System.err.printf("ERROR: Unknown algorithm '%s'. Valid options: ochiai, ochiai-ms%n", algorithm);
-            return 1;
+            return ExitCode.GENERAL_ERROR;
         }
 
         if (algo.equals("ochiai-ms")) {
             System.out.printf("  Algorithm: Ochiai-MS (Mutation Score weighted)%n%n");
             if (sourcePath == null) {
                 System.err.printf("ERROR: --source/-s is required for ochiai-ms (PITest needs source dirs).%n");
-                return 1;
+                return ExitCode.GENERAL_ERROR;
             }
         } else {
             System.out.printf("  Algorithm: Ochiai SBFL%n%n");
         }
 
         //step 1: validate input paths
-        if (!validatePaths()) {
-            return 1;
+        int pathValidation = validatePaths();
+        if (pathValidation != ExitCode.SUCCESS) {
+            return pathValidation;
         }
 
         boolean isOchiaiMS = algo.equals("ochiai-ms");
         int totalSteps = isOchiaiMS ? 8 : 5;
-        printInputSummary(totalSteps);
+        ConsoleReporter.printInputSummary(totalSteps,
+                targetPath.toAbsolutePath().toString(),
+                testPath.toAbsolutePath().toString(),
+                outputPath.toAbsolutePath().toString(),
+                additionalClasspath);
 
         //step 2: run tests with JaCoCo coverage
         // Auto-detect agent conflicts and switch to offline mode if needed
@@ -158,14 +175,15 @@ public class Main implements Callable<Integer> {
         }
         System.out.printf("[2/%d] Running tests with coverage instrumentation%s...%n",
                 totalSteps, offlineMode ? " (offline mode)" : "");
+        progress("Running tests with coverage instrumentation" + (offlineMode ? " (offline mode)" : "") + "...");
         long testExecStart = System.nanoTime();
-        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, offlineMode);
+        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, offlineMode, quiet);
         List<TestExecResult> testExecResults = coverageRunner.run();
         long testExecTimeMs = (System.nanoTime() - testExecStart) / 1_000_000;
         
         if (testExecResults == null || testExecResults.isEmpty()) {
             System.err.printf("ERROR: Coverage execution failed. No .exec files generated.%n");
-            return 1;
+            return ExitCode.COVERAGE_FAILED;
         }
         System.out.printf("      Generated %d coverage file(s):%n", testExecResults.size());
         for (TestExecResult execResult : testExecResults) {
@@ -175,11 +193,12 @@ public class Main implements Callable<Integer> {
         System.out.println();
 
         //step 3: parse JaCoCo execution data (per-test coverage)
+        progress("Parsing coverage data...");
         System.out.printf("[3/%d] Parsing coverage data...%n", totalSteps);
         DataParser dataParser = new DataParser();
         CoverageData coverageData = dataParser.parseMultiple(testExecResults, targetPath);
         
-        printCoverageSummary(coverageData);
+        ConsoleReporter.printCoverageSummary(coverageData);
 
         SbflPreconditions.ValidationResult validation = SbflPreconditions.evaluate(
                 coverageData.getPassedCount(),
@@ -187,13 +206,14 @@ public class Main implements Callable<Integer> {
         );
         if (!validation.canProceed()) {
             System.err.printf("ERROR: %s%n", validation.message());
-            return 2;
+            return ExitCode.NO_FAILING_TESTS;
         }
         if (validation.warning()) {
             System.err.printf("WARNING: %s%n%n", validation.message());
         }
 
         //step 4: build spectrum hit matrix
+        progress("Building spectrum matrix...");
         System.out.printf("[4/%d] Building spectrum hit matrix...%n", totalSteps);
         MatrixBuilder matrixBuilder = new MatrixBuilder();
         SpectrumMatrix matrix = matrixBuilder.build(coverageData);
@@ -206,12 +226,13 @@ public class Main implements Callable<Integer> {
             // Phase 2: Scoped Mutation Analysis
 
             // Identify fault region (lines covered by failing tests)
+            progress("Identifying fault region...");
             FaultRegionIdentifier regionIdentifier = new FaultRegionIdentifier();
             FaultRegionIdentifier.FaultRegion faultRegion = regionIdentifier.identify(matrix);
 
             if (faultRegion.targetClassNames().isEmpty()) {
                 System.err.printf("ERROR: No lines covered by failing tests. Cannot run mutation analysis.%n");
-                return 2;
+                return ExitCode.NO_FAILING_TESTS;
             }
 
             System.out.printf("      Fault region: %d class(es), %d unique line(s).%n%n",
@@ -221,12 +242,20 @@ public class Main implements Callable<Integer> {
             long mutationStart = System.nanoTime();
 
             // Run scoped PITest
+            progress("Running PITest mutation analysis...");
             System.out.printf("[5/8] Running scoped mutation analysis (PITest)...%n");
             MutationRunner mutationRunner = new MutationRunner(
-                    targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData);
-            Path reportDir = mutationRunner.run(faultRegion.targetClassNames());
+                    targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, quiet);
+            Path reportDir;
+            try {
+                reportDir = mutationRunner.run(faultRegion.targetClassNames());
+            } catch (IOException e) {
+                System.err.printf("ERROR: PITest mutation analysis failed: %s%n", e.getMessage());
+                return ExitCode.MUTATION_FAILED;
+            }
 
             // Parse mutation data
+            progress("Parsing mutation results...");
             System.out.printf("[6/8] Parsing mutation results...%n");
             MutationDataParser mutationDataParser = new MutationDataParser();
             MutationData mutationData = mutationDataParser.parse(reportDir);
@@ -238,6 +267,7 @@ public class Main implements Callable<Integer> {
                     mutationData.getNoCoverageCount());
 
             // Compute MS per passing test
+            progress("Computing mutation scores per test...");
             System.out.printf("[7/8] Computing mutation scores per passing test...%n");
             MutationScoreCalculator msCalculator = new MutationScoreCalculator();
             Map<String, Double> mutationScores = msCalculator.calculate(mutationData, coverageData);
@@ -255,6 +285,7 @@ public class Main implements Callable<Integer> {
             }
 
             // Compute Ochiai-MS suspiciousness scores
+            progress("Calculating Ochiai-MS suspiciousness scores...");
             System.out.printf("[8/8] Calculating Ochiai-MS suspiciousness scores...%n");
             long ochiaiMSStart = System.nanoTime();
             OchiaiMSCalculator ochiaiMSCalc = new OchiaiMSCalculator();
@@ -264,6 +295,7 @@ public class Main implements Callable<Integer> {
 
         } else {
             // Standard Ochiai
+            progress("Calculating Ochiai suspiciousness scores...");
             long ochiaiStart = System.nanoTime();
             OchiaiCalculator calculator = new OchiaiCalculator();
             results = calculator.calculate(matrix);
@@ -272,187 +304,48 @@ public class Main implements Callable<Integer> {
         }
 
         //export to CSV
+        progress("Writing results to " + outputPath + "...");
         System.out.printf("[%d/%d] Exporting results to CSV...%n", totalSteps, totalSteps);
         CsvExporter exporter = new CsvExporter();
-        exporter.export(results, outputPath);
+        try {
+            exporter.export(results, outputPath);
+        } catch (IOException e) {
+            System.err.printf("ERROR: Could not write output CSV: %s%n", e.getMessage());
+            return ExitCode.OUTPUT_WRITE_ERROR;
+        }
         System.out.printf("      Report saved to: %s%n%n", outputPath.toAbsolutePath());
 
-        printResultsSummary(results);
+        ConsoleReporter.printResultsSummary(results);
         if (isOchiaiMS) {
-            printTimingSummaryMS(testExecTimeMs, mutationTimeMs, ochiaiTimeMs);
+            ConsoleReporter.printTimingSummaryMS(testExecTimeMs, mutationTimeMs, ochiaiTimeMs);
         } else {
-            printTimingSummary(testExecTimeMs, ochiaiTimeMs);
+            ConsoleReporter.printTimingSummary(testExecTimeMs, ochiaiTimeMs);
         }
 
-        return 0;
+        long totalMs = testExecTimeMs + mutationTimeMs + ochiaiTimeMs;
+        progress(String.format("Done. %d line(s) ranked in %s.", results.size(), ConsoleReporter.formatDuration(totalMs)));
+
+        return ExitCode.SUCCESS;
     }
-    //input summary
-    private void printInputSummary(int totalSteps) {
-        System.out.printf("[1/%d] Input validation complete.%n%n", totalSteps);
-        System.out.printf("+---------------+---------------------------------------------------------+%n");
-        System.out.printf("| Configuration | Path                                                    |%n");
-        System.out.printf("+---------------+---------------------------------------------------------+%n");
-        System.out.printf("| Target Classes| %-56s |%n", truncate(targetPath.toAbsolutePath().toString(), 56));
-        System.out.printf("| Test Classes  | %-56s |%n", truncate(testPath.toAbsolutePath().toString(), 56));
-        System.out.printf("| Output File   | %-56s |%n", truncate(outputPath.toAbsolutePath().toString(), 56));
-        if (additionalClasspath != null && !additionalClasspath.isBlank()) {
-            System.out.printf("| Classpath     | %-56s |%n", truncate(additionalClasspath, 56));
-        }
-        System.out.printf("+---------------+---------------------------------------------------------+%n%n");
-    }
-
-
-    //coverage analysis summary
-    private void printCoverageSummary(CoverageData coverageData) {
-        System.out.printf("%n+---------------------------------+----------+%n");
-        System.out.printf("| Coverage Metric                 | Count    |%n");
-        System.out.printf("+---------------------------------+----------+%n");
-        System.out.printf("| Total Tests                     | %8d |%n", coverageData.getTestCount());
-        System.out.printf("| Passed Tests                    | %8d |%n", coverageData.getPassedCount());
-        System.out.printf("| Failed Tests                    | %8d |%n", coverageData.getFailedCount());
-        System.out.printf("| Unique Lines Tracked            | %8d |%n", coverageData.getTotalLinesTracked());
-        System.out.printf("| Lines Covered                   | %8d |%n", coverageData.getCoveredLineCount());
-        System.out.printf("+---------------------------------+----------+%n%n");
-    }
-
-
-    //results summary
-    private void printResultsSummary(List<SuspiciousnessResult> results) {
-        System.out.printf("+===============================================================+%n");
-        System.out.printf("|  Analysis Complete                                            |%n");
-        System.out.printf("+===============================================================+%n%n");
-        
-        if (results.isEmpty()) {
-            System.out.printf("No suspicious lines found.%n");
-            return;
-        }
-
-        // --- Ranking Distribution ---
-        // Group results by rank to show distinct suspiciousness tiers
-        java.util.LinkedHashMap<Integer, java.util.List<SuspiciousnessResult>> rankGroups = new java.util.LinkedHashMap<>();
-        for (SuspiciousnessResult r : results) {
-            rankGroups.computeIfAbsent(r.rank(), k -> new java.util.ArrayList<>()).add(r);
-        }
-
-        int totalRanks = rankGroups.size();
-        long nonZeroLines = results.stream().filter(r -> r.score() > 0.0).count();
-        double uniqueness = (double) totalRanks / results.size();
-
-        System.out.printf("Ranking Overview:%n%n");
-        System.out.printf("  Total lines tracked:    %d%n", results.size());
-        System.out.printf("  Lines with score > 0:   %d%n", nonZeroLines);
-        System.out.printf("  Distinct score groups:  %d%n", totalRanks);
-        System.out.printf("  Uniqueness (groups/lines): %.2f%%%n%n", uniqueness * 100);
-
-        // --- Suspiciousness Groups (all non-zero) ---
-        System.out.printf("Suspiciousness Ranking (all groups with score > 0):%n%n");
-        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
-        System.out.printf("| Rank | Score      | Lines | Top-N   | Top Classes                                  |%n");
-        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
-
-        int cumulativeLines = 0;
-        for (var entry : rankGroups.entrySet()) {
-            int rank = entry.getKey();
-            java.util.List<SuspiciousnessResult> group = entry.getValue();
-            double score = group.get(0).score();
-
-            if (score <= 0.0) break; // stop at zero-score groups
-
-            cumulativeLines += group.size();
-
-            // Collect distinct class names in this group, sorted by line count descending
-            java.util.LinkedHashMap<String, Integer> classLineCounts = new java.util.LinkedHashMap<>();
-            for (SuspiciousnessResult r : group) {
-                classLineCounts.merge(r.fullyQualifiedClass(), 1, Integer::sum);
-            }
-            java.util.List<java.util.Map.Entry<String, Integer>> sortedClasses = new java.util.ArrayList<>(classLineCounts.entrySet());
-            sortedClasses.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
-
-            // Build a compact class summary string
-            StringBuilder classSummary = new StringBuilder();
-            int classesShown = 0;
-            int totalClasses = sortedClasses.size();
-            for (var ce : sortedClasses) {
-                String simpleName = ce.getKey().contains(".")
-                        ? ce.getKey().substring(ce.getKey().lastIndexOf('.') + 1)
-                        : ce.getKey();
-                String fragment = simpleName;
-                if (totalClasses > 1 || ce.getValue() > 1) {
-                    fragment += " (" + ce.getValue() + ")";
-                }
-
-                int remaining = totalClasses - classesShown - 1;
-                String suffix = remaining > 0 ? ", +" + remaining + " more" : "";
-                int projected = classSummary.length() + (classesShown > 0 ? 2 : 0) + fragment.length() + suffix.length();
-
-                if (classesShown > 0 && projected > 44) {
-                    classSummary.append(", +").append(remaining + 1).append(" more");
-                    break;
-                }
-                if (classesShown > 0) classSummary.append(", ");
-                classSummary.append(fragment);
-                classesShown++;
-            }
-
-            System.out.printf("| %4d | %10.4f | %5d | %7d | %-44s |%n",
-                    rank, score, group.size(), cumulativeLines, truncate(classSummary.toString(), 44));
-        }
-        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
-        System.out.printf("%n  * Top-N = cumulative lines to inspect at each rank (for Top-N evaluation).%n");
-    }
-
-    //timing summary
-    private void printTimingSummary(long testExecTimeMs, long ochiaiTimeMs) {
-        System.out.printf("%nTiming:%n");
-        System.out.printf("  Test execution:      %s%n", formatDuration(testExecTimeMs));
-        System.out.printf("  Ochiai calculation:  %s%n", formatDuration(ochiaiTimeMs));
-        System.out.printf("  Total:               %s%n", formatDuration(testExecTimeMs + ochiaiTimeMs));
-    }
-
-    //timing summary for ochiai-ms (includes mutation analysis phase)
-    private void printTimingSummaryMS(long testExecTimeMs, long mutationTimeMs, long ochiaiMSTimeMs) {
-        System.out.printf("%nTiming:%n");
-        System.out.printf("  Test execution:      %s%n", formatDuration(testExecTimeMs));
-        System.out.printf("  Mutation analysis:   %s%n", formatDuration(mutationTimeMs));
-        System.out.printf("  Ochiai-MS scoring:   %s%n", formatDuration(ochiaiMSTimeMs));
-        System.out.printf("  Total:               %s%n", formatDuration(testExecTimeMs + mutationTimeMs + ochiaiMSTimeMs));
-    }
-
-    private String formatDuration(long ms) {
-        if (ms < 1000) {
-            return ms + "ms";
-        }
-        return String.format("%.2fs", ms / 1000.0);
-    }
-
-    //truncates a string to fit a specified width
-    private String truncate(String str, int maxWidth) { //untested on other commandlines
-        if (str.length() <= maxWidth) {
-            return str;
-        }
-        return "..." + str.substring(str.length() - maxWidth + 3);
-    }
-
     /**
       validates that all required input paths exist.
+      Returns ExitCode.SUCCESS (0) on success, or a specific ExitCode on failure.
      */
-    private boolean validatePaths() {
-        boolean valid = true;
-
+    private int validatePaths() {
         if (!Files.exists(targetPath)) {
             System.err.printf("ERROR: Target path does not exist: %s%n", targetPath);
-            valid = false;
+            return ExitCode.TARGET_NOT_FOUND;
         } else if (!Files.isDirectory(targetPath)) {
             System.err.printf("ERROR: Target path is not a directory: %s%n", targetPath);
-            valid = false;
+            return ExitCode.TARGET_NOT_FOUND;
         }
 
         if (!Files.exists(testPath)) {
             System.err.printf("ERROR: Test path does not exist: %s%n", testPath);
-            valid = false;
+            return ExitCode.TEST_NOT_FOUND;
         } else if (!Files.isDirectory(testPath)) {
             System.err.printf("ERROR: Test path is not a directory: %s%n", testPath);
-            valid = false;
+            return ExitCode.TEST_NOT_FOUND;
         }
 
         Path outputDir = outputPath.getParent();
@@ -461,10 +354,10 @@ public class Main implements Callable<Integer> {
                 Files.createDirectories(outputDir);
             } catch (Exception e) {
                 System.err.printf("ERROR: Cannot create output directory: %s%n", outputDir);
-                valid = false;
+                return ExitCode.OUTPUT_WRITE_ERROR;
             }
         }
 
-        return valid;
+        return ExitCode.SUCCESS;
     }
 }

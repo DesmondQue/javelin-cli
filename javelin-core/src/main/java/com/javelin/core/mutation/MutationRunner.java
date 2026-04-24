@@ -39,24 +39,24 @@ public class MutationRunner {
     private final int threadCount;
     private final CoverageData coverageData;
     private final ProcessExecutor processExecutor;
+    private final boolean quiet;
 
-    /**
-     * @param targetPath          compiled source classes directory (e.g. build/classes/java/main)
-     * @param testPath            compiled test classes directory  (e.g. build/classes/java/test)
-     * @param sourcePath          source directory for PITest reports (e.g. src/main/java)
-     * @param additionalClasspath extra classpath entries (from CLI --classpath arg), may be null
-     * @param threadCount         number of threads for PITest parallel mutation testing
-     * @param coverageData        per-test coverage data for test scoping (may be null to skip filtering)
-     */
     public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
                           String additionalClasspath, int threadCount,
                           CoverageData coverageData) {
+        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, false);
+    }
+
+    public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
+                          String additionalClasspath, int threadCount,
+                          CoverageData coverageData, boolean quiet) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.sourcePath = sourcePath;
         this.additionalClasspath = additionalClasspath;
         this.threadCount = threadCount;
         this.coverageData = coverageData;
+        this.quiet = quiet;
         this.processExecutor = new ProcessExecutor();
     }
 
@@ -79,16 +79,16 @@ public class MutationRunner {
         if (testClasses.isEmpty()) {
             // Fallback: if coverage-based filtering yields nothing, use all test classes
             testClasses = findTestClasses(testPath);
-            System.out.println("      Test scoping: fallback to all " + testClasses.size() + " test class(es).");
+            if (!quiet) System.out.println("      Test scoping: fallback to all " + testClasses.size() + " test class(es).");
         } else {
-            System.out.println("      Test scoping: " + testClasses.size() + " test class(es) cover the fault region.");
+            if (!quiet) System.out.println("      Test scoping: " + testClasses.size() + " test class(es) cover the fault region.");
         }
 
         String classpath = buildClasspath();
-
         List<String> javaArgs = buildPitestArgs(classpath, targetClassNames, testClasses, reportDir);
 
-        System.out.println("      Running PITest on " + targetClassNames.size() + " class(es)...");
+        if (!quiet) System.out.println("      Running PITest on " + targetClassNames.size() + " class(es)...");
+        System.err.printf("[javelin] Running PITest on %d class(es)...%n", targetClassNames.size());
 
         ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
                 javaArgs,
@@ -97,7 +97,7 @@ public class MutationRunner {
                 600 // 10-minute timeout
         );
 
-        if (!result.stdout().isBlank()) {
+        if (!quiet && !result.stdout().isBlank()) {
             System.out.println(result.stdout());
         }
         if (!result.stderr().isBlank()) {
@@ -115,7 +115,8 @@ public class MutationRunner {
                     + ". stderr: " + result.stderr());
         }
 
-        System.out.println("      PITest report written to: " + reportDir);
+        if (!quiet) System.out.println("      PITest report written to: " + reportDir);
+        System.err.printf("[javelin] PITest complete.%n");
         return reportDir;
     }
 

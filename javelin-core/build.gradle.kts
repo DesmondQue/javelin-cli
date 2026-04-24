@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.javelin"
-version = "1.0.0-SNAPSHOT"
+version = "1.1.0"
 
 java {
     toolchain {
@@ -17,6 +17,12 @@ java {
 tasks.withType<JavaCompile> {
     options.release.set(21)  //generate Java 21 compatible bytecode
     options.compilerArgs.add("-Xlint:deprecation")
+}
+
+tasks.processResources {
+    filesMatching("version.properties") {
+        expand("projectVersion" to project.version)
+    }
 }
 
 repositories {
@@ -186,27 +192,31 @@ tasks.distTar {
     archiveFileName.set("javelin-cli-${releaseVersion}.tar")
 }
 
-// Task: build Chocolatey .nupkg
-tasks.register<Exec>("chocopack") {
+// Task: update Scoop manifest version and SHA256
+tasks.register("updateScoop") {
     group = "distribution"
-    description = "Builds a Chocolatey .nupkg package for javelin-cli"
+    description = "Updates the Scoop manifest with the current version and SHA256"
     dependsOn(tasks.distZip)
 
-    workingDir = file("choco")
-    val nuspec = file("choco/javelin.nuspec")
+    doLast {
+        val zipFile = tasks.distZip.get().archiveFile.get().asFile
+        val md = MessageDigest.getInstance("SHA-256")
+        val bytes = md.digest(zipFile.readBytes())
+        val sha = bytes.joinToString("") { byte -> "%02x".format(byte) }
 
-    doFirst {
-        // Update version in nuspec to match Gradle version
-        val content = nuspec.readText()
-        nuspec.writeText(
-            content.replace(
-                Regex("<version>[^<]+</version>"),
-                "<version>${releaseVersion}</version>"
-            )
+        val manifest = file("../bucket/javelin-cli.json")
+        var content = manifest.readText()
+        content = content.replace(Regex("\"version\":\\s*\"[^\"]+\""), "\"version\": \"${releaseVersion}\"")
+        content = content.replace(Regex("\"hash\":\\s*\"[^\"]+\""), "\"hash\": \"${sha}\"")
+        // Keep URL and autoupdate in sync with version
+        content = content.replace(
+            Regex("\"url\":\\s*\"[^\"]+\""),
+            "\"url\": \"https://github.com/DesmondQue/javelin-cli/releases/download/v${releaseVersion}/javelin-cli-${releaseVersion}.zip\""
         )
-    }
+        manifest.writeText(content)
 
-    commandLine("choco", "pack", nuspec.absolutePath, "--outputdirectory", layout.buildDirectory.dir("choco").get().asFile.absolutePath)
+        println("Updated bucket/javelin-cli.json → version=${releaseVersion}, hash=${sha}")
+    }
 }
 
 // Task: update Homebrew formula version and SHA

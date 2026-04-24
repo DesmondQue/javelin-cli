@@ -46,19 +46,25 @@ public class CoverageRunner {
     private final String additionalClasspath;
     private final ProcessExecutor processExecutor;
     private final boolean offlineMode;
+    private final boolean quiet;
 
     private Path tempDir;
     private Path jacocoAgentJar;
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath) {
-        this(targetPath, testPath, additionalClasspath, false);
+        this(targetPath, testPath, additionalClasspath, false, false);
     }
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode) {
+        this(targetPath, testPath, additionalClasspath, offlineMode, false);
+    }
+
+    public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode, boolean quiet) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.additionalClasspath = additionalClasspath;
         this.offlineMode = offlineMode;
+        this.quiet = quiet;
         this.processExecutor = new ProcessExecutor();
     }
 
@@ -183,15 +189,16 @@ public class CoverageRunner {
             }
         }
         
-        System.out.println("      Found " + testClasses.size() + " test class(es) with " 
+        if (!quiet) System.out.println("      Found " + testClasses.size() + " test class(es) with "
                 + testSpecifiers.size() + " test method(s)");
-        
+        if (!quiet) System.err.printf("[javelin] Discovered %d test method(s), executing...%n", testSpecifiers.size());
+
         if (testSpecifiers.isEmpty()) {
             System.err.println("      WARNING: No test methods found");
             return new ArrayList<>();
         }
-        
-        System.out.println("      Executing all tests in single JVM fork" + (offlineMode ? " (offline instrumentation)" : "") + "...");
+
+        if (!quiet) System.out.println("      Executing all tests in single JVM fork" + (offlineMode ? " (offline instrumentation)" : "") + "...");
 
         // In offline mode, pre-instrument a copy of the target classes into a temp dir
         // and substitute it on the classpath so no -javaagent is needed.
@@ -201,11 +208,11 @@ public class CoverageRunner {
         Path effectiveTargetPath = targetPath;
         try {
             if (offlineMode) {
-                System.out.println("      Instrumenting classes offline...");
+                if (!quiet) System.out.println("      Instrumenting classes offline...");
                 OfflineInstrumenter offlineInstrumenter = new OfflineInstrumenter();
                 instrumentedTempDir = offlineInstrumenter.instrumentIntoTempDir(targetPath);
                 effectiveTargetPath = instrumentedTempDir;
-                System.out.println("      Offline-instrumented classes written to: " + effectiveTargetPath);
+                if (!quiet) System.out.println("      Offline-instrumented classes written to: " + effectiveTargetPath);
             }
 
             // Build arguments for SingleJvmTestRunner
@@ -220,7 +227,7 @@ public class CoverageRunner {
             );
 
             // Print output
-            if (!result.stdout().isBlank()) {
+            if (!quiet && !result.stdout().isBlank()) {
                 System.out.println(result.stdout());
             }
             if (!result.stderr().isBlank()) {
@@ -240,15 +247,17 @@ public class CoverageRunner {
                 System.err.println("      WARNING: Subprocess exited with unexpected code: " + result.exitCode());
             }
 
-            // List temp directory contents for diagnostic purposes
-            try (var stream = Files.list(tempDir)) {
-                List<Path> tempFiles = stream.toList();
-                System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
-                for (Path f : tempFiles) {
-                    System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");
+            // List temp directory contents for diagnostic purposes (verbose only)
+            if (!quiet) {
+                try (var stream = Files.list(tempDir)) {
+                    List<Path> tempFiles = stream.toList();
+                    System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
+                    for (Path f : tempFiles) {
+                        System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");
+                    }
+                } catch (IOException e) {
+                    System.err.println("      WARNING: Could not list temp directory: " + e.getMessage());
                 }
-            } catch (IOException e) {
-                System.err.println("      WARNING: Could not list temp directory: " + e.getMessage());
             }
 
             // Collect results from output directory
@@ -256,7 +265,8 @@ public class CoverageRunner {
 
             long passedCount = results.stream().filter(TestExecResult::passed).count();
             long failedCount = results.size() - passedCount;
-            System.out.println("      Total: " + results.size() + " test(s) - " + passedCount + " passed, " + failedCount + " failed");
+            if (!quiet) System.out.println("      Total: " + results.size() + " test(s) - " + passedCount + " passed, " + failedCount + " failed");
+            System.err.printf("[javelin] Tests complete: %d passed, %d failed.%n", passedCount, failedCount);
 
             return results;
         } finally {
@@ -371,7 +381,7 @@ public class CoverageRunner {
         Map<String, Boolean> testResults = null;
         try {
             testResults = SingleJvmTestRunner.readResultsFile(tempDir);
-            System.out.println("      Read " + testResults.size() + " test result(s) from results file");
+            if (!quiet) System.out.println("      Read " + testResults.size() + " test result(s) from results file");
         } catch (IOException e) {
             System.err.println("      WARNING: Could not read test results file: " + tempDir.resolve("test-results.dat") + " - " + e.getMessage());
         }
@@ -394,14 +404,14 @@ public class CoverageRunner {
             if (Files.exists(execFile)) {
                 boolean passed = testResults != null && testResults.getOrDefault(testId, false);
                 results.add(new TestExecResult(testId, execFile, passed, passed ? 0 : 1));
-                System.out.println("        " + testId + ": " + (passed ? "PASSED" : "FAILED"));
+                if (!quiet) System.out.println("        " + testId + ": " + (passed ? "PASSED" : "FAILED"));
             } else {
                 // Try alternate naming patterns
                 Path altExecFile = tempDir.resolve("jacoco-" + simpleClassName + "_" + methodName + ".exec");
                 if (Files.exists(altExecFile)) {
                     boolean passed = testResults != null && testResults.getOrDefault(testId, false);
                     results.add(new TestExecResult(testId, altExecFile, passed, passed ? 0 : 1));
-                    System.out.println("        " + testId + ": " + (passed ? "PASSED" : "FAILED"));
+                    if (!quiet) System.out.println("        " + testId + ": " + (passed ? "PASSED" : "FAILED"));
                 } else {
                     System.err.println("      WARNING: No coverage file found for " + testId);
                 }
@@ -445,7 +455,7 @@ public class CoverageRunner {
         Path agentPath = findJacocoAgentRuntimeJar();
         if (agentPath != null) {
             Files.copy(agentPath, jacocoAgentJar, StandardCopyOption.REPLACE_EXISTING);
-            System.out.println("      Using JaCoCo agent: " + agentPath);
+            if (!quiet) System.out.println("      Using JaCoCo agent: " + agentPath);
             return;
         }
 
@@ -454,7 +464,7 @@ public class CoverageRunner {
         if (agentUrl != null) {
             try (InputStream is = agentUrl.openStream()) {
                 Files.copy(is, jacocoAgentJar, StandardCopyOption.REPLACE_EXISTING);
-                System.out.println("      Extracted JaCoCo agent from resources");
+                if (!quiet) System.out.println("      Extracted JaCoCo agent from resources");
                 return;
             }
         }
@@ -464,7 +474,7 @@ public class CoverageRunner {
         if (fatJarAgentUrl != null) {
             try (InputStream is = fatJarAgentUrl.openStream()) {
                 Files.copy(is, jacocoAgentJar, StandardCopyOption.REPLACE_EXISTING);
-                System.out.println("      Extracted JaCoCo agent from fat JAR");
+                if (!quiet) System.out.println("      Extracted JaCoCo agent from fat JAR");
                 return;
             }
         }
