@@ -66,18 +66,12 @@ import picocli.CommandLine.Option;
         "  ochiai      Ochiai SBFL (default)",
         "  ochiai-ms   Ochiai weighted by mutation score (needs -s)",
         "",
-        "Granularity:",
-        "  statement   Line-level output (default, for IntelliJ plugin)",
-        "  method      Method-level output (for SBFL evaluation)",
-        "",
-        "Ranking:",
-        "  dense       Dense ranking: 1, 2, 2, 3 (default)",
-        "  average     Average ranking (MID): 1.0, 2.5, 2.5, 4.0",
-        "              (only with -g method)",
+        "Granularity (-g) and ranking:",
+        "  statement   Line-level output (default)",
+        "  method      Method-level output; --ranking: dense (default) or average",
         "",
         "Examples:",
         "  javelin -t classes/main -T classes/test -o report.csv",
-        "  javelin -t classes/main -T classes/test -o report.csv -g method",
         "  javelin -a ochiai-ms -t classes/main -T classes/test",
         "          -s src/main/java -o results.csv -g method --ranking average",
         "",
@@ -116,11 +110,11 @@ public class Main implements Callable<Integer> {
     private int threadCount = Runtime.getRuntime().availableProcessors();
 
     @Option(names = {"--pitest-threads"}, required = false, paramLabel = "<count>", order = 7,
-            description = "PITest threads (default: CPU cores). Use 1 for deterministic results.")
+            description = "PITest threads (default: CPU cores)")
     private int pitestThreadCount = Runtime.getRuntime().availableProcessors();
 
     @Option(names = {"--offline"}, required = false, order = 8,
-            description = "Use offline instrumentation (avoids agent conflicts)")
+            description = "Offline instrumentation (avoids agent conflicts)")
     private boolean offlineMode = false;
 
     @Option(names = {"-q", "--quiet"}, required = false, order = 9,
