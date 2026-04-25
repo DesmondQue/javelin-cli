@@ -13,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.jar.JarFile;
 
@@ -52,20 +53,25 @@ public class CoverageRunner {
     private Path jacocoAgentJar;
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath) {
-        this(targetPath, testPath, additionalClasspath, false, false);
+        this(targetPath, testPath, additionalClasspath, false, false, null);
     }
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode) {
-        this(targetPath, testPath, additionalClasspath, offlineMode, false);
+        this(targetPath, testPath, additionalClasspath, offlineMode, false, null);
     }
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode, boolean quiet) {
+        this(targetPath, testPath, additionalClasspath, offlineMode, quiet, null);
+    }
+
+    public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath,
+                          boolean offlineMode, boolean quiet, Path jvmHome) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.additionalClasspath = additionalClasspath;
         this.offlineMode = offlineMode;
         this.quiet = quiet;
-        this.processExecutor = new ProcessExecutor();
+        this.processExecutor = new ProcessExecutor(jvmHome);
     }
 
     /**
@@ -250,7 +256,7 @@ public class CoverageRunner {
             // List temp directory contents for diagnostic purposes (verbose only)
             if (!quiet) {
                 try (var stream = Files.list(tempDir)) {
-                    List<Path> tempFiles = stream.toList();
+                    List<Path> tempFiles = stream.collect(Collectors.toList());
                     System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
                     for (Path f : tempFiles) {
                         System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");

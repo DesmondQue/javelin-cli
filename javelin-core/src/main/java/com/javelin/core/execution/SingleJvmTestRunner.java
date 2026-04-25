@@ -197,7 +197,18 @@ public class SingleJvmTestRunner {
     }
 
     /**
-     * Configuration record for the test runner.
+     * Configuration for the test runner.
      */
-    private record RunnerConfig(Path outputDir, List<String> tests) {}
+    private static final class RunnerConfig {
+        private final Path outputDir;
+        private final List<String> tests;
+
+        RunnerConfig(Path outputDir, List<String> tests) {
+            this.outputDir = outputDir;
+            this.tests = tests;
+        }
+
+        Path outputDir() { return outputDir; }
+        List<String> tests() { return tests; }
+    }
 }

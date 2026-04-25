@@ -18,14 +18,38 @@ public class FaultRegionIdentifier {
 
     /**
      * Result of fault region identification.
-     *
-     * @param targetClassNames Fully qualified class names to pass to PITest targetClasses
-     * @param targetLines      className → set of line numbers in the fault region
      */
-    public record FaultRegion(
-            Set<String> targetClassNames,
-            Map<String, Set<Integer>> targetLines
-    ) {}
+    public static final class FaultRegion {
+        private final Set<String> targetClassNames;
+        private final Map<String, Set<Integer>> targetLines;
+
+        public FaultRegion(Set<String> targetClassNames, Map<String, Set<Integer>> targetLines) {
+            this.targetClassNames = targetClassNames;
+            this.targetLines = targetLines;
+        }
+
+        public Set<String> targetClassNames() { return targetClassNames; }
+        public Map<String, Set<Integer>> targetLines() { return targetLines; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            FaultRegion that = (FaultRegion) o;
+            return java.util.Objects.equals(targetClassNames, that.targetClassNames)
+                    && java.util.Objects.equals(targetLines, that.targetLines);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(targetClassNames, targetLines);
+        }
+
+        @Override
+        public String toString() {
+            return "FaultRegion[targetClassNames=" + targetClassNames + ", targetLines=" + targetLines + "]";
+        }
+    }
 
     /**
      * Identifies the fault region from the given SpectrumMatrix.

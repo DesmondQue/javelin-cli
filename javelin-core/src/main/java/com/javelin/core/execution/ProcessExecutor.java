@@ -23,17 +23,60 @@ public class ProcessExecutor {
     private static final boolean IS_WINDOWS = System.getProperty("os.name")
             .toLowerCase().contains("win");
 
+    private final Path overrideJavaHome; // null = use current JVM
+
+    public ProcessExecutor() {
+        this.overrideJavaHome = null;
+    }
+
+    public ProcessExecutor(Path jvmHome) {
+        this.overrideJavaHome = jvmHome;
+    }
+
     /**
       result of a process execution
      */
-    public record ExecutionResult(
-            int exitCode,
-            String stdout,
-            String stderr,
-            boolean timedOut
-    ) {
+    public static final class ExecutionResult {
+        private final int exitCode;
+        private final String stdout;
+        private final String stderr;
+        private final boolean timedOut;
+
+        public ExecutionResult(int exitCode, String stdout, String stderr, boolean timedOut) {
+            this.exitCode = exitCode;
+            this.stdout = stdout;
+            this.stderr = stderr;
+            this.timedOut = timedOut;
+        }
+
+        public int exitCode() { return exitCode; }
+        public String stdout() { return stdout; }
+        public String stderr() { return stderr; }
+        public boolean timedOut() { return timedOut; }
+
         public boolean isSuccess() {
             return exitCode == 0 && !timedOut;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ExecutionResult that = (ExecutionResult) o;
+            return exitCode == that.exitCode && timedOut == that.timedOut
+                    && java.util.Objects.equals(stdout, that.stdout)
+                    && java.util.Objects.equals(stderr, that.stderr);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(exitCode, stdout, stderr, timedOut);
+        }
+
+        @Override
+        public String toString() {
+            return "ExecutionResult[exitCode=" + exitCode + ", stdout=" + stdout
+                    + ", stderr=" + stderr + ", timedOut=" + timedOut + "]";
         }
     }
 
@@ -165,13 +208,19 @@ public class ProcessExecutor {
     }
 
     /**
-      gets path to java executable
-      uses JAVA_HOME if set, otherwise relies on PATH
+      gets path to java executable.
+      Uses overrideJavaHome if set, otherwise falls back to java.home system property.
      */
     private String getJavaExecutable() {
-        String javaHome = System.getProperty("java.home");
-        if (javaHome != null && !javaHome.isEmpty()) {
-            Path javaBin = Path.of(javaHome, "bin", IS_WINDOWS ? "java.exe" : "java");
+        Path homeToUse = overrideJavaHome;
+        if (homeToUse == null) {
+            String javaHome = System.getProperty("java.home");
+            if (javaHome != null && !javaHome.isEmpty()) {
+                homeToUse = Path.of(javaHome);
+            }
+        }
+        if (homeToUse != null) {
+            Path javaBin = homeToUse.resolve(Path.of("bin", IS_WINDOWS ? "java.exe" : "java"));
             if (javaBin.toFile().exists()) {
                 return javaBin.toString();
             }

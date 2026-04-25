@@ -15,7 +15,7 @@ java {
 }
 
 tasks.withType<JavaCompile> {
-    options.release.set(21)  //generate Java 21 compatible bytecode
+    options.release.set(11)  //generate Java 11 compatible bytecode for Defects4J
     options.compilerArgs.add("-Xlint:deprecation")
 }
 

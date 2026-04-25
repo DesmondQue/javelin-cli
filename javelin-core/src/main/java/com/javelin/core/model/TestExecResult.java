@@ -1,32 +1,48 @@
 package com.javelin.core.model;
 
 import java.nio.file.Path;
+import java.util.Objects;
 
-/**
- * Represents the result of executing a single test class with coverage instrumentation.
- * Captures both the coverage data file path and the test pass/fail status.
- *
- * @param testClassName the simple name of the test class (e.g., "CalculatorTest")
- * @param execFile      path to the generated jacoco-<ClassName>.exec coverage file
- * @param passed        true if all tests in the class passed (exit code 0), false otherwise
- * @param exitCode      the raw exit code from JUnit execution
- */
-public record TestExecResult(
-        String testClassName,
-        Path execFile,
-        boolean passed,
-        int exitCode
-) {
-    /**
-     * Creates a TestExecResult from execution data.
-     * JUnit Console Launcher returns exit code 0 for success, non-zero for failures.
-     *
-     * @param testClassName the test class name
-     * @param execFile      the coverage file path
-     * @param exitCode      the JUnit exit code
-     * @return a new TestExecResult with passed derived from exit code
-     */
+public final class TestExecResult {
+    private final String testClassName;
+    private final Path execFile;
+    private final boolean passed;
+    private final int exitCode;
+
+    public TestExecResult(String testClassName, Path execFile, boolean passed, int exitCode) {
+        this.testClassName = testClassName;
+        this.execFile = execFile;
+        this.passed = passed;
+        this.exitCode = exitCode;
+    }
+
+    public String testClassName() { return testClassName; }
+    public Path execFile() { return execFile; }
+    public boolean passed() { return passed; }
+    public int exitCode() { return exitCode; }
+
     public static TestExecResult fromExitCode(String testClassName, Path execFile, int exitCode) {
         return new TestExecResult(testClassName, execFile, exitCode == 0, exitCode);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TestExecResult that = (TestExecResult) o;
+        return passed == that.passed && exitCode == that.exitCode
+                && Objects.equals(testClassName, that.testClassName)
+                && Objects.equals(execFile, that.execFile);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(testClassName, execFile, passed, exitCode);
+    }
+
+    @Override
+    public String toString() {
+        return "TestExecResult[testClassName=" + testClassName + ", execFile=" + execFile
+                + ", passed=" + passed + ", exitCode=" + exitCode + "]";
     }
 }

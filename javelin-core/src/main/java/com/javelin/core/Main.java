@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import com.javelin.core.execution.CoverageRunner;
+import com.javelin.core.execution.ProcessExecutor;
 import com.javelin.core.export.ConsoleReporter;
 import com.javelin.core.export.CsvExporter;
 import com.javelin.core.math.MethodAggregator;
@@ -129,6 +130,10 @@ public class Main implements Callable<Integer> {
             description = "Ranking strategy: dense (default) or average")
     private String rankingStrategy = "dense";
 
+    @Option(names = {"--jvm-home"}, required = false, paramLabel = "<path>", order = 12,
+            description = "JVM home to use for test execution subprocesses (default: current JVM)")
+    private Path jvmHome = null;
+
     private void progress(String msg) {
         if (!quiet) System.err.printf("[javelin] %s%n", msg);
     }
@@ -187,6 +192,16 @@ public class Main implements Callable<Integer> {
             System.out.printf("  Ranking: %s%n%n", useAverageRank ? "Average (MID)" : "Dense");
         }
 
+        //step 0c: validate --jvm-home if provided
+        if (jvmHome != null) {
+            Path javaBin = jvmHome.resolve(ProcessExecutor.isWindows() ? "bin/java.exe" : "bin/java");
+            if (!Files.exists(javaBin)) {
+                System.err.printf("ERROR: --jvm-home '%s' does not contain bin/java%n", jvmHome);
+                return ExitCode.GENERAL_ERROR;
+            }
+            System.out.printf("  Test JVM: %s%n%n", javaBin.toAbsolutePath());
+        }
+
         //step 1: validate input paths
         int pathValidation = validatePaths();
         if (pathValidation != ExitCode.SUCCESS) {
@@ -219,7 +234,7 @@ public class Main implements Callable<Integer> {
                 totalSteps, offlineMode ? " (offline mode)" : "");
         progress("Running tests with coverage instrumentation" + (offlineMode ? " (offline mode)" : "") + "...");
         long testExecStart = System.nanoTime();
-        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, offlineMode, quiet);
+        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, offlineMode, quiet, jvmHome);
         List<TestExecResult> testExecResults = coverageRunner.run();
         long testExecTimeMs = (System.nanoTime() - testExecStart) / 1_000_000;
         
@@ -287,7 +302,7 @@ public class Main implements Callable<Integer> {
             progress("Running PITest mutation analysis...");
             System.out.printf("[5/8] Running scoped mutation analysis (PITest)...%n");
             MutationRunner mutationRunner = new MutationRunner(
-                    targetPath, testPath, sourcePath, additionalClasspath, pitestThreadCount, coverageData, quiet);
+                    targetPath, testPath, sourcePath, additionalClasspath, pitestThreadCount, coverageData, quiet, jvmHome);
             Path reportDir;
             try {
                 reportDir = mutationRunner.run(faultRegion.targetClassNames());

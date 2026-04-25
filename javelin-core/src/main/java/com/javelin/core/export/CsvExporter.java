@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.javelin.core.model.MethodSuspiciousnessResult;
 import com.javelin.core.model.SuspiciousnessResult;
@@ -122,7 +123,7 @@ public class CsvExporter {
                                 double minScore) throws IOException {
         List<SuspiciousnessResult> filtered = results.stream()
                 .filter(r -> r.score() >= minScore)
-                .toList();
+                .collect(Collectors.toList());
         
         export(filtered, outputPath);
     }
@@ -140,7 +141,7 @@ public class CsvExporter {
                            int topN) throws IOException {
         List<SuspiciousnessResult> top = results.stream()
                 .limit(topN)
-                .toList();
+                .collect(Collectors.toList());
 
         export(top, outputPath);
     }

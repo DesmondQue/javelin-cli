@@ -26,7 +26,37 @@ public final class AgentConflictDetector {
     /**
      * A detected conflict: the conflicting JAR file name and a human-readable reason.
      */
-    public record Conflict(String jarName, String reason) {}
+    public static final class Conflict {
+        private final String jarName;
+        private final String reason;
+
+        public Conflict(String jarName, String reason) {
+            this.jarName = jarName;
+            this.reason = reason;
+        }
+
+        public String jarName() { return jarName; }
+        public String reason() { return reason; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Conflict that = (Conflict) o;
+            return java.util.Objects.equals(jarName, that.jarName)
+                    && java.util.Objects.equals(reason, that.reason);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(jarName, reason);
+        }
+
+        @Override
+        public String toString() {
+            return "Conflict[jarName=" + jarName + ", reason=" + reason + "]";
+        }
+    }
 
     /**
      * JAR name patterns (matched case-insensitively against the file name of each

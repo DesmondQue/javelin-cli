@@ -40,16 +40,23 @@ public class MutationRunner {
     private final CoverageData coverageData;
     private final ProcessExecutor processExecutor;
     private final boolean quiet;
+    private final Path jvmHome;
 
     public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
                           String additionalClasspath, int threadCount,
                           CoverageData coverageData) {
-        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, false);
+        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, false, null);
     }
 
     public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
                           String additionalClasspath, int threadCount,
                           CoverageData coverageData, boolean quiet) {
+        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, quiet, null);
+    }
+
+    public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
+                          String additionalClasspath, int threadCount,
+                          CoverageData coverageData, boolean quiet, Path jvmHome) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.sourcePath = sourcePath;
@@ -57,7 +64,8 @@ public class MutationRunner {
         this.threadCount = threadCount;
         this.coverageData = coverageData;
         this.quiet = quiet;
-        this.processExecutor = new ProcessExecutor();
+        this.jvmHome = jvmHome;
+        this.processExecutor = new ProcessExecutor(jvmHome);
     }
 
     /**
@@ -197,6 +205,13 @@ public class MutationRunner {
         // Parallel mutation testing threads
         args.add("--threads");
         args.add(String.valueOf(threadCount));
+
+        // Override JVM for per-mutant forks (required for Defects4J Java 11 projects)
+        if (jvmHome != null) {
+            Path javaBin = jvmHome.resolve(Path.of("bin", ProcessExecutor.isWindows() ? "java.exe" : "java"));
+            args.add("--jvmPath");
+            args.add(javaBin.toAbsolutePath().toString());
+        }
 
         return args;
     }

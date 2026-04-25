@@ -1,40 +1,54 @@
 package com.javelin.core.model;
 
-/**
- * Suspiciousness Result Model
- * 
- * represents the final Ochiai suspiciousness score for a single line of code
- * 
- * @param fullyQualifiedClass Fully qualified class name (e.g., "com.example.OrderService")
- * @param lineNumber          Line number (1-based)
- * @param score               Ochiai suspiciousness score [0.0, 1.0]
- * @param rank                Dense rank (1 = most suspicious)
- */
-public record SuspiciousnessResult(
-        String fullyQualifiedClass,
-        int lineNumber,
-        double score,
-        int rank
-) {
-    /**
-     returns a unique identifier for this line
-     */
+import java.util.Objects;
+
+public final class SuspiciousnessResult {
+    private final String fullyQualifiedClass;
+    private final int lineNumber;
+    private final double score;
+    private final int rank;
+
+    public SuspiciousnessResult(String fullyQualifiedClass, int lineNumber, double score, int rank) {
+        this.fullyQualifiedClass = fullyQualifiedClass;
+        this.lineNumber = lineNumber;
+        this.score = score;
+        this.rank = rank;
+    }
+
+    public String fullyQualifiedClass() { return fullyQualifiedClass; }
+    public int lineNumber() { return lineNumber; }
+    public double score() { return score; }
+    public int rank() { return rank; }
+
     public String getLineId() {
         return fullyQualifiedClass + ":" + lineNumber;
     }
 
-    /**
-     formats the score as a percentage string
-     */
     public String getScoreAsPercentage() {
         return String.format("%.2f%%", score * 100);
     }
 
-    /**
-     creates a display-friendly string for this result
-     */
     public String toDisplayString() {
-        return String.format("Rank %d: %s:%d (Score: %.4f)", 
-                rank, fullyQualifiedClass, lineNumber, score);
+        return String.format("Rank %d: %s:%d (Score: %.4f)", rank, fullyQualifiedClass, lineNumber, score);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SuspiciousnessResult that = (SuspiciousnessResult) o;
+        return lineNumber == that.lineNumber && Double.compare(that.score, score) == 0
+                && rank == that.rank && Objects.equals(fullyQualifiedClass, that.fullyQualifiedClass);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(fullyQualifiedClass, lineNumber, score, rank);
+    }
+
+    @Override
+    public String toString() {
+        return "SuspiciousnessResult[fullyQualifiedClass=" + fullyQualifiedClass
+                + ", lineNumber=" + lineNumber + ", score=" + score + ", rank=" + rank + "]";
     }
 }
