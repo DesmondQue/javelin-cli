@@ -1,6 +1,6 @@
 # Algorithms
 
-Javelin supports two fault localization algorithms.
+Javelin supports two fault localization algorithms, with configurable output granularity and ranking strategies.
 
 ## Ochiai (default)
 
@@ -28,3 +28,51 @@ javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s sr
 ```
 
 > **Note:** `ochiai-ms` requires the `-s/--source` flag and takes longer due to mutation analysis.
+
+## Method-Level Aggregation
+
+Scoring always happens at the statement (line) level. When `-g method` is specified, Javelin aggregates line-level scores to method-level as a post-scoring step. This mirrors the evaluation methodology used by GZoltar and standard SBFL literature (Defects4J benchmarks, Sarhan & Beszedes 2020).
+
+**How it works:**
+
+1. Method boundaries are extracted from JaCoCo's `IMethodCoverage` data (name, descriptor, first/last line).
+2. Each scored line is mapped to its containing method via line range lookup.
+3. Each method's suspiciousness score is the **maximum** score among its lines.
+4. Methods are sorted by score (descending) and ranked.
+5. Lines not contained in any method (e.g., field initializers, static blocks) are grouped under a synthetic `<class-level>` entry.
+
+Overloaded methods are distinguished by their JVM descriptor (e.g., `add(II)I` vs. `add(DD)D`). Synthetic methods (lambdas, bridge methods) and abstract/native methods are excluded.
+
+```bash
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method
+```
+
+## Ranking Strategies
+
+Javelin supports two ranking strategies, selectable via `--ranking`:
+
+### Dense Ranking (default)
+
+Tied scores share the same rank. The next distinct score gets the next integer rank.
+
+Example: scores `[1.0, 0.7, 0.7, 0.3]` → ranks `[1, 2, 2, 3]`
+
+This is the default for both statement-level and method-level output.
+
+### Average Ranking (MID)
+
+Tied scores receive the average of the positions they would occupy. This is the standard ranking used in SBFL evaluation literature (Sarhan & Beszedes 2020) for computing Top-N and EXAM scores.
+
+$$\text{MID}(s) = S + \frac{E - 1}{2}$$
+
+Where:
+- $S$ = 1-based start position of the tie group
+- $E$ = number of elements sharing the same score
+
+Example: scores `[1.0, 0.7, 0.7, 0.3]` → ranks `[1.0, 2.5, 2.5, 4.0]`
+
+Average ranking is only available with `-g method`:
+
+```bash
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method --ranking average
+```

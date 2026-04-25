@@ -69,6 +69,7 @@ public class MutationDataParser {
 
         List<MutantInfo> mutants = new ArrayList<>();
         Map<String, Set<String>> killMatrix = new HashMap<>();
+        Set<String> examinedTests = new HashSet<>();
 
         NodeList mutationNodes = doc.getElementsByTagName("mutation");
         Map<String, Integer> mutantIndexTracker = new HashMap<>();
@@ -102,9 +103,20 @@ public class MutationDataParser {
                 String javelinTestId = normalizeTestId(pitestTestName);
                 killMatrix.computeIfAbsent(javelinTestId, k -> new HashSet<>()).add(mutantId);
             }
+
+            // Track all tests PITest examined (from coveringTests)
+            String coveringTests = getElementText(mutationEl, "coveringTests");
+            if (coveringTests != null && !coveringTests.isBlank()) {
+                for (String testName : coveringTests.split(PITEST_TEST_SEPARATOR)) {
+                    String trimmed = testName.trim();
+                    if (!trimmed.isEmpty()) {
+                        examinedTests.add(normalizeTestId(trimmed));
+                    }
+                }
+            }
         }
 
-        return new MutationData(mutants, killMatrix);
+        return new MutationData(mutants, killMatrix, examinedTests);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.javelin.core.model;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,8 +33,25 @@ public record CoverageData(
          set of all lines tracked during coverage analysis
          includes both covered and uncovered executable lines
          */
-        Set<LineCoverage> allLineCoverage
+        Set<LineCoverage> allLineCoverage,
+
+        /**
+         method boundary mapping extracted from JaCoCo
+         key: fully qualified class name
+         value: list of MethodInfo with line boundaries
+         */
+        Map<String, List<MethodInfo>> methodMapping
 ) {
+    public CoverageData(
+            Map<String, TestResult> testResults,
+            Map<String, Map<String, Set<Integer>>> coveragePerTest,
+            Set<LineCoverage> allLineCoverage) {
+        this(testResults, coveragePerTest, allLineCoverage, Map.of());
+    }
+
+    public boolean hasMethodMapping() {
+        return methodMapping != null && !methodMapping.isEmpty();
+    }
     /**
      returns total number of tests executed
      */

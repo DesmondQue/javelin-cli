@@ -16,9 +16,11 @@ import com.javelin.core.model.TestResult;
  * Computes MS(t) — the mutation score — for each passing test.
  *
  * For a passing test t:
- *   1. Reachable mutants = mutants on lines that t covers (excluding NO_COVERAGE mutants)
- *   2. Killed mutants    = reachable mutants that t actually killed (from kill matrix)
- *   3. MS(t)             = |killed| / |reachable|
+ *   1. If PITest did not examine this test, MS(t) = 1.0 (no mutation evidence; fall back
+ *      to standard Ochiai weight to preserve ranking differentiation)
+ *   2. Reachable mutants = mutants on lines that t covers (excluding NO_COVERAGE mutants)
+ *   3. Killed mutants    = reachable mutants that t actually killed (from kill matrix)
+ *   4. MS(t)             = |killed| / |reachable|
  *
  * If a passing test has no reachable mutants, MS(t) = 0.0 (conservative assumption).
  *
@@ -47,6 +49,13 @@ public class MutationScoreCalculator {
 
             // Only compute MS for passing tests
             if (!result.passed()) {
+                continue;
+            }
+
+            // Tests not examined by PITest have no mutation evidence — use weight 1.0
+            // to fall back to standard Ochiai behavior for these tests
+            if (!mutationData.examinedTests().contains(testId)) {
+                mutationScores.put(testId, 1.0);
                 continue;
             }
 

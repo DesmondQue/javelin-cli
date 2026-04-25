@@ -1,5 +1,6 @@
 package com.javelin.core.export;
 
+import com.javelin.core.model.MethodSuspiciousnessResult;
 import com.javelin.core.model.SuspiciousnessResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -84,5 +85,41 @@ class CsvExporterTest {
         String csv = exporter.exportToString(List.of());
         String[] lines = csv.split(System.lineSeparator());
         assertEquals(1, lines.length, "only the header line should be present");
+    }
+
+    // ── Method-level export ──────────────────────────────────────────────────
+
+    @Test
+    void exportMethodToString_containsMethodHeader() {
+        String csv = exporter.exportMethodsToString(List.of());
+        assertTrue(csv.startsWith("FullyQualifiedClass,MethodName,Descriptor,MaxScore,Rank,FirstLine,LastLine"));
+    }
+
+    @Test
+    void exportMethodToString_singleResult_correctFormat() {
+        MethodSuspiciousnessResult r = new MethodSuspiciousnessResult(
+                "com.example.Foo", "calc", "(II)D", 0.75, 1.0, 10, 25);
+        String csv = exporter.exportMethodsToString(List.of(r));
+        assertTrue(csv.contains("com.example.Foo,calc,(II)D,0.750000,1.0,10,25"));
+    }
+
+    @Test
+    void exportMethodToString_averageRank_formattedAsDecimal() {
+        MethodSuspiciousnessResult r = new MethodSuspiciousnessResult(
+                "com.A", "foo", "()V", 0.5, 2.5, 1, 10);
+        String csv = exporter.exportMethodsToString(List.of(r));
+        assertTrue(csv.contains(",2.5,"), "average rank 2.5 should appear in output");
+    }
+
+    @Test
+    void exportMethod_writesFileCorrectly(@TempDir Path dir) throws IOException {
+        Path output = dir.resolve("methods.csv");
+        MethodSuspiciousnessResult r = new MethodSuspiciousnessResult(
+                "com.example.Bar", "process", "(I)V", 0.9, 1.0, 5, 30);
+        exporter.exportMethods(List.of(r), output);
+
+        assertTrue(Files.exists(output));
+        String content = Files.readString(output);
+        assertTrue(content.contains("com.example.Bar,process,(I)V,0.900000,1.0,5,30"));
     }
 }

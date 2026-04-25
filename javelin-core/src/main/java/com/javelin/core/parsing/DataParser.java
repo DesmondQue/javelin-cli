@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.jacoco.core.analysis.CoverageBuilder;
 import org.jacoco.core.analysis.IClassCoverage;
 import org.jacoco.core.analysis.ICounter;
 import org.jacoco.core.analysis.ILine;
+import org.jacoco.core.analysis.IMethodCoverage;
 import org.jacoco.core.data.ExecutionData;
 import org.jacoco.core.data.ExecutionDataReader;
 import org.jacoco.core.data.ExecutionDataStore;
@@ -22,6 +24,7 @@ import org.jacoco.core.data.SessionInfoStore;
 
 import com.javelin.core.model.CoverageData;
 import com.javelin.core.model.LineCoverage;
+import com.javelin.core.model.MethodInfo;
 import com.javelin.core.model.TestResult;
 
 /*
@@ -176,11 +179,12 @@ public class DataParser {
      * @return CoverageData containing per-test coverage information
      * @throws IOException if any file cannot be read
      */
-    public CoverageData parseMultiple(List<com.javelin.core.model.TestExecResult> testExecResults, 
+    public CoverageData parseMultiple(List<com.javelin.core.model.TestExecResult> testExecResults,
                                        Path classesDir) throws IOException {
         Map<String, TestResult> testResults = new HashMap<>();
         Map<String, Map<String, Set<Integer>>> coveragePerTest = new HashMap<>();
         Set<LineCoverage> allLineCoverage = new HashSet<>();
+        Map<String, List<MethodInfo>> methodMapping = new HashMap<>();
 
         for (com.javelin.core.model.TestExecResult testExecResult : testExecResults) {
             Path execFile = testExecResult.execFile();
@@ -229,15 +233,36 @@ public class DataParser {
                 if (!coveredLines.isEmpty()) {
                     testCoverage.put(className, coveredLines);
                 }
+
+                if (!methodMapping.containsKey(className)) {
+                    List<MethodInfo> methods = extractMethodBoundaries(classCoverage, className);
+                    if (!methods.isEmpty()) {
+                        methodMapping.put(className, methods);
+                    }
+                }
             }
 
-            //add this test's coverage to the per-test map
             coveragePerTest.put(testClassName, testCoverage);
-            
-            //create test result using actual pass/fail from JUnit exit code
             testResults.put(testClassName, new TestResult(testClassName, passed, null));
         }
 
-        return new CoverageData(testResults, coveragePerTest, allLineCoverage);
+        return new CoverageData(testResults, coveragePerTest, allLineCoverage, methodMapping);
+    }
+
+    private List<MethodInfo> extractMethodBoundaries(IClassCoverage classCoverage, String className) {
+        List<MethodInfo> methods = new ArrayList<>();
+        for (IMethodCoverage methodCov : classCoverage.getMethods()) {
+            int mFirst = methodCov.getFirstLine();
+            int mLast = methodCov.getLastLine();
+            if (mFirst <= 0 || mLast <= 0) {
+                continue;
+            }
+            String mName = methodCov.getName();
+            if (mName.contains("$")) {
+                continue;
+            }
+            methods.add(new MethodInfo(className, mName, methodCov.getDesc(), mFirst, mLast));
+        }
+        return methods;
     }
 }

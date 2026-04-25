@@ -2,6 +2,8 @@
 
 Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javelin analyzes test pass/fail data and code coverage to rank lines of code by suspiciousness, helping you find bugs faster.
 
+Javelin supports both **statement-level** (line) and **method-level** output granularity. Statement-level is the default, suitable for IDE integration (e.g., IntelliJ plugin line highlighting). Method-level aggregation (`-g method`) produces results comparable to SBFL evaluation literature (GZoltar, Defects4J benchmarks), with support for **dense** and **average (MID)** ranking strategies.
+
 Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS**, an **experimental** algorithm that integrates mutation testing into the SBFL pipeline. Ochiai-MS is a novel contribution of the research study overseeing the development of Javelin, exploring whether mutation score–weighted test spectra can improve fault localization accuracy.
 
 > **⚠️ Experimental:** The Ochiai-MS algorithm (`--algorithm ochiai-ms`) is an active area of research and should be considered experimental. Results and behavior may change in future releases.
@@ -53,10 +55,22 @@ cd javelin-cli/javelin-core
 javelin [-a <algorithm>] -t <target-classes> -T <test-classes> -o <output.csv> [options]
 ```
 
-**Standard Ochiai analysis:**
+**Standard Ochiai analysis (statement-level, default):**
 
 ```bash
 javelin -t build/classes/java/main -T build/classes/java/test -o report.csv
+```
+
+**Method-level output (for SBFL evaluation):**
+
+```bash
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method
+```
+
+**Method-level with average ranking (matches SBFL literature conventions):**
+
+```bash
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method --ranking average
 ```
 
 **Ochiai-MS with mutation scoring:**
@@ -91,11 +105,14 @@ javelin -t build/classes/java/main \
 | `-s` | `--source` | Only for `ochiai-ms` | — | Path to Java source files (for PITest) |
 | `-c` | `--classpath` | No | — | Additional classpath entries |
 | `-j` | `--threads` | No | CPU cores | Parallel threads for test execution |
+| `-g` | `--granularity` | No | `statement` | Output granularity: `statement` or `method` |
+| | `--ranking` | No | `dense` | Ranking strategy: `dense` or `average` (only with `-g method`) |
 | | `--offline` | No | `false` | Offline bytecode instrumentation (auto-enabled on agent conflicts) |
 | `-h` | `--help` | — | — | Show help message |
 | `-V` | `--version` | — | — | Print version |
 
 - **At least one failing test** is required (nothing to localize if all pass).
+- `--ranking average` is only valid with `-g method`. Using it with statement-level output produces a warning.
 
 ---
 

@@ -1,6 +1,6 @@
 # Javelin CLI
 
-Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javelin analyzes test pass/fail data and code coverage to rank lines of code by suspiciousness, helping you find bugs faster.
+Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javelin analyzes test pass/fail data and code coverage to rank code elements by suspiciousness, helping you find bugs faster. Supports both **statement-level** and **method-level** output granularity with **dense** and **average (MID)** ranking strategies.
 
 ---
 
@@ -25,6 +25,8 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 
 - **Ochiai** — Standard SBFL ranking using pass/fail spectrum data.
 - **Ochiai-MS** — Enhanced Ochiai that weights passing tests by their mutation-killing strength via [PITest](https://pitest.org/) analysis.
+- **Method-level aggregation** — Post-scoring aggregation from line to method granularity, comparable to GZoltar and SBFL evaluation literature.
+- **Average (MID) ranking** — Fractional ranking for tied scores, standard in SBFL evaluation (Sarhan & Beszedes 2020).
 
 ---
 
@@ -88,10 +90,22 @@ javelin [-a <algorithm>] -t <target-classes> -T <test-classes> -o <output.csv> [
 
 ### Quick Start Examples
 
-**Standard Ochiai analysis** (default):
+**Standard Ochiai analysis** (statement-level, default):
 
 ```bash
 javelin -t build/classes/java/main -T build/classes/java/test -o report.csv
+```
+
+**Method-level output** (for SBFL evaluation):
+
+```bash
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method
+```
+
+**Method-level with average ranking** (matches SBFL literature conventions):
+
+```bash
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method --ranking average
 ```
 
 **Ochiai-MS with mutation scoring** (requires source path):
@@ -102,6 +116,16 @@ javelin -a ochiai-ms \
   -T build/classes/java/test \
   -s src/main/java \
   -o results.csv
+```
+
+**Full evaluation setup** (Ochiai-MS, method-level, average ranking):
+
+```bash
+javelin -a ochiai-ms \
+  -t build/classes/java/main \
+  -T build/classes/java/test \
+  -s src/main/java \
+  -o results.csv -g method --ranking average
 ```
 
 **With additional classpath and thread control**:
@@ -129,6 +153,10 @@ javelin -t build/classes/java/main \
 | `-s` | `--source` | Only for `ochiai-ms` | — | Path to Java source files (needed by PITest for mutation analysis) |
 | `-c` | `--classpath` | No | — | Additional classpath entries (JARs or directories) |
 | `-j` | `--threads` | No | CPU core count | Number of parallel threads for test execution |
+| `-g` | `--granularity` | No | `statement` | Output granularity: `statement` or `method` |
+| | `--ranking` | No | `dense` | Ranking strategy: `dense` or `average` (only with `-g method`) |
+| | `--offline` | No | `false` | Offline bytecode instrumentation (avoids agent conflicts) |
+| `-q` | `--quiet` | No | `false` | Suppress progress output |
 | `-h` | `--help` | — | — | Show help message and exit |
 | `-V` | `--version` | — | — | Print version information and exit |
 
@@ -136,6 +164,7 @@ javelin -t build/classes/java/main \
 
 - **At least one failing test** is required. Javelin exits with an error if all tests pass (there is nothing to localize).
 - **Zero passing tests** is allowed, but the suspiciousness ranking will be less informative.
+- `--ranking average` is only valid with `-g method`. Using it with statement-level output produces a warning.
 
 ---
 
@@ -166,26 +195,52 @@ javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s sr
 
 > **Note:** `ochiai-ms` requires the `-s/--source` flag and takes longer due to mutation analysis.
 
+### Method-Level Aggregation
+
+When `-g method` is specified, line-level scores are aggregated to method-level as a post-scoring step. Each method's score is the maximum score among its lines. Method boundaries are extracted from JaCoCo coverage data.
+
+### Ranking Strategies
+
+- **Dense** (default): tied scores share the same rank. `[1, 2, 2, 3]`
+- **Average (MID)**: tied scores receive the mean of their ordinal positions. `[1.0, 2.5, 2.5, 4.0]` — standard in SBFL evaluation literature.
+
 ---
 
 ## Output Format
 
-Javelin outputs a CSV file with the following columns:
+### Statement-Level (default)
 
 | Column | Description |
 |---|---|
-| `rank` | Suspiciousness rank (1 = most suspicious) |
-| `class` | Fully qualified Java class name |
-| `line` | Line number in the source file |
-| `score` | Suspiciousness score (0.0 – 1.0) |
-
-Example output:
+| `FullyQualifiedClass` | Fully qualified Java class name |
+| `LineNumber` | Line number in the source file |
+| `OchiaiScore` | Suspiciousness score (0.0 – 1.0) |
+| `Rank` | Dense rank (1 = most suspicious) |
 
 ```csv
-rank,class,line,score
-1,com.example.Calculator,42,1.0000
-2,com.example.Calculator,38,0.7071
-3,com.example.MathHelper,15,0.5000
+FullyQualifiedClass,LineNumber,OchiaiScore,Rank
+com.example.Calculator,42,1.000000,1
+com.example.Calculator,38,0.707107,2
+com.example.MathHelper,15,0.500000,3
+```
+
+### Method-Level (`-g method`)
+
+| Column | Description |
+|---|---|
+| `FullyQualifiedClass` | Fully qualified Java class name |
+| `MethodName` | Method name (`<init>` for constructors) |
+| `Descriptor` | JVM method descriptor for overload disambiguation |
+| `MaxScore` | Maximum suspiciousness score among the method's lines |
+| `Rank` | Dense or average rank (formatted as decimal) |
+| `FirstLine` | First line of the method |
+| `LastLine` | Last line of the method |
+
+```csv
+FullyQualifiedClass,MethodName,Descriptor,MaxScore,Rank,FirstLine,LastLine
+com.example.Calculator,compute,(II)I,1.000000,1.0,10,25
+com.example.Calculator,validate,(I)Z,0.707107,2.0,30,45
+com.example.MathHelper,sqrt,(D)D,0.500000,3.0,5,15
 ```
 
 ---
@@ -265,14 +320,17 @@ javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s sr
 Javelin follows a layered pipeline architecture:
 
 ```
-CLI Input → Coverage Collection → Data Parsing → Matrix Building → SBFL Scoring → CSV Export
+CLI Input → Coverage Collection → Data Parsing → Matrix Building → SBFL Scoring → [Method Aggregation] → CSV Export
 ```
+
+The method aggregation step is optional, activated by `-g method`.
 
 | Layer | Components | Responsibility |
 |---|---|---|
 | **Controller** | `Main.java` | CLI parsing (Picocli), input validation, pipeline orchestration |
-| **Execution** | `CoverageRunner` | JaCoCo-instrumented test execution with parallel thread support |
-| **Data Processing** | `DataParser`, `MatrixBuilder` | Parse `.exec` coverage files, build spectrum hit matrix |
-| **Math** | `OchiaiCalculator`, `OchiaiMSCalculator` | Compute suspiciousness scores |
+| **Execution** | `CoverageRunner`, `OfflineInstrumenter` | JaCoCo-instrumented test execution (online agent or offline pre-instrumentation) |
+| **Data Processing** | `DataParser`, `MatrixBuilder` | Parse `.exec` coverage files, build spectrum hit matrix; extract method boundaries |
+| **Math** | `OchiaiCalculator`, `OchiaiMSCalculator` | Compute line-level suspiciousness scores |
+| **Aggregation** | `MethodAggregator` | Aggregate line scores to method-level, apply dense or average ranking |
 | **Mutation** *(ochiai-ms only)* | `MutationRunner`, `MutationScoreCalculator` | Scoped PITest analysis and per-test mutation scoring |
-| **Export** | `CsvExporter` | Write ranked results to CSV |
+| **Export** | `CsvExporter`, `ConsoleReporter` | Write ranked results to CSV; print terminal summary tables |

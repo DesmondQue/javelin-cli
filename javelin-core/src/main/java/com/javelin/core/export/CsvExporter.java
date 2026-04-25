@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.javelin.core.model.MethodSuspiciousnessResult;
 import com.javelin.core.model.SuspiciousnessResult;
 
 /**
@@ -25,6 +26,10 @@ public class CsvExporter {
 
     private static final String CSV_HEADER = "FullyQualifiedClass,LineNumber,OchiaiScore,Rank";
     private static final String CSV_FORMAT = "%s,%d,%.6f,%d";
+
+    private static final String METHOD_CSV_HEADER =
+            "FullyQualifiedClass,MethodName,Descriptor,MaxScore,Rank,FirstLine,LastLine";
+    private static final String METHOD_CSV_FORMAT = "%s,%s,%s,%.6f,%.1f,%d,%d";
 
     /**
       exports suspiciousness results to a CSV file.
@@ -124,19 +129,62 @@ public class CsvExporter {
 
     /**
       exports results limited to top N entries
-     
+
       @param results    List of SuspiciousnessResult to export
       @param outputPath Path to the output CSV file
       @param topN       Number of top results to include
       @throws IOException if the file cannot be written
      */
-    public void exportTopN(List<SuspiciousnessResult> results, 
-                           Path outputPath, 
+    public void exportTopN(List<SuspiciousnessResult> results,
+                           Path outputPath,
                            int topN) throws IOException {
         List<SuspiciousnessResult> top = results.stream()
                 .limit(topN)
                 .toList();
-        
+
         export(top, outputPath);
+    }
+
+    public void exportMethods(List<MethodSuspiciousnessResult> results, Path outputPath) throws IOException {
+        Path parentDir = outputPath.getParent();
+        if (parentDir != null && !Files.exists(parentDir)) {
+            Files.createDirectories(parentDir);
+        }
+
+        try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
+            writer.write(METHOD_CSV_HEADER);
+            writer.newLine();
+            for (MethodSuspiciousnessResult result : results) {
+                String line = String.format(METHOD_CSV_FORMAT,
+                        escapeForCsv(result.fullyQualifiedClass()),
+                        escapeForCsv(result.methodName()),
+                        escapeForCsv(result.descriptor()),
+                        result.score(),
+                        result.rank(),
+                        result.firstLine(),
+                        result.lastLine());
+                writer.write(line);
+                writer.newLine();
+            }
+        }
+    }
+
+    public String exportMethodsToString(List<MethodSuspiciousnessResult> results) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(METHOD_CSV_HEADER).append(System.lineSeparator());
+
+        for (MethodSuspiciousnessResult result : results) {
+            sb.append(String.format(METHOD_CSV_FORMAT,
+                    escapeForCsv(result.fullyQualifiedClass()),
+                    escapeForCsv(result.methodName()),
+                    escapeForCsv(result.descriptor()),
+                    result.score(),
+                    result.rank(),
+                    result.firstLine(),
+                    result.lastLine()));
+            sb.append(System.lineSeparator());
+        }
+
+        return sb.toString();
     }
 }

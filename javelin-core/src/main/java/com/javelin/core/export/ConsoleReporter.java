@@ -1,6 +1,7 @@
 package com.javelin.core.export;
 
 import com.javelin.core.model.CoverageData;
+import com.javelin.core.model.MethodSuspiciousnessResult;
 import com.javelin.core.model.SuspiciousnessResult;
 
 import java.util.ArrayList;
@@ -118,6 +119,68 @@ public final class ConsoleReporter {
         }
         System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
         System.out.printf("%n  * Top-N = cumulative lines to inspect at each rank (for Top-N evaluation).%n");
+    }
+
+    public static void printMethodResultsSummary(List<MethodSuspiciousnessResult> results) {
+        System.out.printf("+===============================================================+%n");
+        System.out.printf("|  Analysis Complete (Method-Level)                              |%n");
+        System.out.printf("+===============================================================+%n%n");
+
+        if (results.isEmpty()) {
+            System.out.printf("No suspicious methods found.%n");
+            return;
+        }
+
+        LinkedHashMap<Double, List<MethodSuspiciousnessResult>> rankGroups = new LinkedHashMap<>();
+        for (MethodSuspiciousnessResult r : results) {
+            rankGroups.computeIfAbsent(r.rank(), k -> new ArrayList<>()).add(r);
+        }
+
+        long nonZeroMethods = results.stream().filter(r -> r.score() > 0.0).count();
+
+        System.out.printf("Ranking Overview:%n%n");
+        System.out.printf("  Total methods ranked:     %d%n", results.size());
+        System.out.printf("  Methods with score > 0:   %d%n", nonZeroMethods);
+        System.out.printf("  Distinct rank groups:     %d%n%n", rankGroups.size());
+
+        System.out.printf("Suspiciousness Ranking (all groups with score > 0):%n%n");
+        System.out.printf("+--------+------------+---------+---------+----------------------------------------------+%n");
+        System.out.printf("|   Rank | Score      | Methods | Top-N   | Top Methods                                  |%n");
+        System.out.printf("+--------+------------+---------+---------+----------------------------------------------+%n");
+
+        int cumulativeMethods = 0;
+        for (var entry : rankGroups.entrySet()) {
+            double rank = entry.getKey();
+            List<MethodSuspiciousnessResult> group = entry.getValue();
+            double score = group.get(0).score();
+            if (score <= 0.0) break;
+
+            cumulativeMethods += group.size();
+
+            StringBuilder methodSummary = new StringBuilder();
+            int shown = 0;
+            for (MethodSuspiciousnessResult r : group) {
+                String simpleName = r.fullyQualifiedClass().contains(".")
+                        ? r.fullyQualifiedClass().substring(r.fullyQualifiedClass().lastIndexOf('.') + 1)
+                        : r.fullyQualifiedClass();
+                String fragment = simpleName + "#" + r.methodName();
+                int remaining = group.size() - shown - 1;
+                String suffix = remaining > 0 ? ", +" + remaining + " more" : "";
+                int projected = methodSummary.length() + (shown > 0 ? 2 : 0) + fragment.length() + suffix.length();
+                if (shown > 0 && projected > 44) {
+                    methodSummary.append(", +").append(remaining + 1).append(" more");
+                    break;
+                }
+                if (shown > 0) methodSummary.append(", ");
+                methodSummary.append(fragment);
+                shown++;
+            }
+
+            System.out.printf("| %6.1f | %10.4f | %7d | %7d | %-44s |%n",
+                    rank, score, group.size(), cumulativeMethods, truncate(methodSummary.toString(), 44));
+        }
+        System.out.printf("+--------+------------+---------+---------+----------------------------------------------+%n");
+        System.out.printf("%n  * Top-N = cumulative methods to inspect at each rank.%n");
     }
 
     public static void printTimingSummary(long testExecTimeMs, long ochiaiTimeMs) {

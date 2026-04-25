@@ -17,7 +17,7 @@ class MutationScoreCalculatorTest {
     @Test
     void passingTest_killsAllReachable_scoreIsOne() {
         MutantInfo m = new MutantInfo("com.Foo:10:NEG:0", "com.Foo", 10, "KILLED");
-        MutationData mutationData = new MutationData(List.of(m), Map.of("T#pass", Set.of(m.mutantId())));
+        MutationData mutationData = new MutationData(List.of(m), Map.of("T#pass", Set.of(m.mutantId())), Set.of("T#pass"));
 
         Map<String, TestResult> testResults = Map.of("T#pass", TestResult.passed("T#pass"));
         Map<String, Map<String, Set<Integer>>> cov = Map.of("T#pass", Map.of("com.Foo", Set.of(10)));
@@ -31,7 +31,7 @@ class MutationScoreCalculatorTest {
     @Test
     void passingTest_killsNone_scoreIsZero() {
         MutantInfo m = new MutantInfo("com.Foo:10:NEG:0", "com.Foo", 10, "SURVIVED");
-        MutationData mutationData = new MutationData(List.of(m), Map.of());
+        MutationData mutationData = new MutationData(List.of(m), Map.of(), Set.of("T#pass"));
 
         Map<String, TestResult> testResults = Map.of("T#pass", TestResult.passed("T#pass"));
         Map<String, Map<String, Set<Integer>>> cov = Map.of("T#pass", Map.of("com.Foo", Set.of(10)));
@@ -43,9 +43,8 @@ class MutationScoreCalculatorTest {
     }
 
     @Test
-    void passingTest_noReachableMutants_scoreIsZero() {
-        // Test covers a line with no mutants
-        MutationData mutationData = new MutationData(List.of(), Map.of());
+    void passingTest_notExaminedByPitest_scoreIsOne() {
+        MutationData mutationData = new MutationData(List.of(), Map.of(), Set.of());
 
         Map<String, TestResult> testResults = Map.of("T#pass", TestResult.passed("T#pass"));
         Map<String, Map<String, Set<Integer>>> cov = Map.of("T#pass", Map.of("com.Foo", Set.of(99)));
@@ -53,12 +52,12 @@ class MutationScoreCalculatorTest {
 
         Map<String, Double> scores = calc.calculate(mutationData, cd);
 
-        assertEquals(0.0, scores.get("T#pass"), 1e-9);
+        assertEquals(1.0, scores.get("T#pass"), 1e-9);
     }
 
     @Test
     void failingTest_notIncludedInScores() {
-        MutationData mutationData = new MutationData(List.of(), Map.of());
+        MutationData mutationData = new MutationData(List.of(), Map.of(), Set.of());
 
         Map<String, TestResult> testResults = Map.of("T#fail", TestResult.failed("T#fail", "err"));
         CoverageData cd = new CoverageData(testResults, Map.of(), Set.of());
@@ -69,10 +68,9 @@ class MutationScoreCalculatorTest {
     }
 
     @Test
-    void noCoverageStatus_excluded_fromReachable() {
-        // NO_COVERAGE mutants should not count as reachable
+    void noCoverageStatus_testNotExamined_scoreIsOne() {
         MutantInfo noCov = new MutantInfo("com.Foo:10:NEG:0", "com.Foo", 10, "NO_COVERAGE");
-        MutationData mutationData = new MutationData(List.of(noCov), Map.of());
+        MutationData mutationData = new MutationData(List.of(noCov), Map.of(), Set.of());
 
         Map<String, TestResult> testResults = Map.of("T#pass", TestResult.passed("T#pass"));
         Map<String, Map<String, Set<Integer>>> cov = Map.of("T#pass", Map.of("com.Foo", Set.of(10)));
@@ -80,15 +78,14 @@ class MutationScoreCalculatorTest {
 
         Map<String, Double> scores = calc.calculate(mutationData, cd);
 
-        // No reachable mutants (NO_COVERAGE excluded) → score = 0.0
-        assertEquals(0.0, scores.get("T#pass"), 1e-9);
+        assertEquals(1.0, scores.get("T#pass"), 1e-9);
     }
 
     @Test
     void partialKills_scoreIsRatio() {
         MutantInfo m1 = new MutantInfo("com.Foo:10:NEG:0", "com.Foo", 10, "KILLED");
         MutantInfo m2 = new MutantInfo("com.Foo:10:AOR:1", "com.Foo", 10, "SURVIVED");
-        MutationData mutationData = new MutationData(List.of(m1, m2), Map.of("T#pass", Set.of(m1.mutantId())));
+        MutationData mutationData = new MutationData(List.of(m1, m2), Map.of("T#pass", Set.of(m1.mutantId())), Set.of("T#pass"));
 
         Map<String, TestResult> testResults = Map.of("T#pass", TestResult.passed("T#pass"));
         Map<String, Map<String, Set<Integer>>> cov = Map.of("T#pass", Map.of("com.Foo", Set.of(10)));
@@ -102,7 +99,7 @@ class MutationScoreCalculatorTest {
     @Test
     void timedOutMutant_countedAsKilled() {
         MutantInfo m = new MutantInfo("com.Foo:5:NEG:0", "com.Foo", 5, "TIMED_OUT");
-        MutationData mutationData = new MutationData(List.of(m), Map.of("T#pass", Set.of(m.mutantId())));
+        MutationData mutationData = new MutationData(List.of(m), Map.of("T#pass", Set.of(m.mutantId())), Set.of("T#pass"));
 
         Map<String, TestResult> testResults = Map.of("T#pass", TestResult.passed("T#pass"));
         Map<String, Map<String, Set<Integer>>> cov = Map.of("T#pass", Map.of("com.Foo", Set.of(5)));

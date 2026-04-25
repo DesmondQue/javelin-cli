@@ -11,9 +11,11 @@ import java.util.concurrent.Callable;
 import com.javelin.core.execution.CoverageRunner;
 import com.javelin.core.export.ConsoleReporter;
 import com.javelin.core.export.CsvExporter;
+import com.javelin.core.math.MethodAggregator;
 import com.javelin.core.math.MutationScoreCalculator;
 import com.javelin.core.math.OchiaiCalculator;
 import com.javelin.core.math.OchiaiMSCalculator;
+import com.javelin.core.model.MethodSuspiciousnessResult;
 import com.javelin.core.model.CoverageData;
 import com.javelin.core.model.ExitCode;
 import com.javelin.core.model.MutationData;
@@ -64,10 +66,20 @@ import picocli.CommandLine.Option;
         "  ochiai      Ochiai SBFL (default)",
         "  ochiai-ms   Ochiai weighted by mutation score (needs -s)",
         "",
+        "Granularity:",
+        "  statement   Line-level output (default, for IntelliJ plugin)",
+        "  method      Method-level output (for SBFL evaluation)",
+        "",
+        "Ranking:",
+        "  dense       Dense ranking: 1, 2, 2, 3 (default)",
+        "  average     Average ranking (MID): 1.0, 2.5, 2.5, 4.0",
+        "              (only with -g method)",
+        "",
         "Examples:",
         "  javelin -t classes/main -T classes/test -o report.csv",
+        "  javelin -t classes/main -T classes/test -o report.csv -g method",
         "  javelin -a ochiai-ms -t classes/main -T classes/test",
-        "          -s src/main/java -o results.csv",
+        "          -s src/main/java -o results.csv -g method --ranking average",
         "",
         "Requires >=1 failing test.",
         ""
@@ -103,13 +115,25 @@ public class Main implements Callable<Integer> {
             description = "Parallel threads (default: CPU cores)")
     private int threadCount = Runtime.getRuntime().availableProcessors();
 
-    @Option(names = {"--offline"}, required = false, order = 7,
+    @Option(names = {"--pitest-threads"}, required = false, paramLabel = "<count>", order = 7,
+            description = "PITest threads (default: CPU cores). Use 1 for deterministic results.")
+    private int pitestThreadCount = Runtime.getRuntime().availableProcessors();
+
+    @Option(names = {"--offline"}, required = false, order = 8,
             description = "Use offline instrumentation (avoids agent conflicts)")
     private boolean offlineMode = false;
 
-    @Option(names = {"-q", "--quiet"}, required = false, order = 8,
+    @Option(names = {"-q", "--quiet"}, required = false, order = 9,
             description = "Suppress progress output")
     private boolean quiet = false;
+
+    @Option(names = {"-g", "--granularity"}, required = false, paramLabel = "<level>", order = 10,
+            description = "Output granularity: statement (default) or method")
+    private String granularity = "statement";
+
+    @Option(names = {"--ranking"}, required = false, paramLabel = "<strategy>", order = 11,
+            description = "Ranking strategy: dense (default) or average")
+    private String rankingStrategy = "dense";
 
     private void progress(String msg) {
         if (!quiet) System.err.printf("[javelin] %s%n", msg);
@@ -143,6 +167,30 @@ public class Main implements Callable<Integer> {
             }
         } else {
             System.out.printf("  Algorithm: Ochiai SBFL%n%n");
+        }
+
+        //step 0b: validate granularity and ranking
+        String gran = granularity.toLowerCase().trim();
+        if (!gran.equals("statement") && !gran.equals("method")) {
+            System.err.printf("ERROR: Unknown granularity '%s'. Valid options: statement, method%n", granularity);
+            return ExitCode.GENERAL_ERROR;
+        }
+        String ranking = rankingStrategy.toLowerCase().trim();
+        if (!ranking.equals("dense") && !ranking.equals("average")) {
+            System.err.printf("ERROR: Unknown ranking strategy '%s'. Valid options: dense, average%n", rankingStrategy);
+            return ExitCode.GENERAL_ERROR;
+        }
+        boolean isMethodLevel = gran.equals("method");
+        boolean useAverageRank = ranking.equals("average");
+
+        if (useAverageRank && !isMethodLevel) {
+            System.err.printf("WARNING: --ranking average is only supported with -g method. Using dense ranking.%n%n");
+            useAverageRank = false;
+        }
+
+        if (isMethodLevel) {
+            System.out.printf("  Granularity: Method-level (max-score aggregation)%n");
+            System.out.printf("  Ranking: %s%n%n", useAverageRank ? "Average (MID)" : "Dense");
         }
 
         //step 1: validate input paths
@@ -245,7 +293,7 @@ public class Main implements Callable<Integer> {
             progress("Running PITest mutation analysis...");
             System.out.printf("[5/8] Running scoped mutation analysis (PITest)...%n");
             MutationRunner mutationRunner = new MutationRunner(
-                    targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, quiet);
+                    targetPath, testPath, sourcePath, additionalClasspath, pitestThreadCount, coverageData, quiet);
             Path reportDir;
             try {
                 reportDir = mutationRunner.run(faultRegion.targetClassNames());
@@ -307,15 +355,41 @@ public class Main implements Callable<Integer> {
         progress("Writing results to " + outputPath + "...");
         System.out.printf("[%d/%d] Exporting results to CSV...%n", totalSteps, totalSteps);
         CsvExporter exporter = new CsvExporter();
-        try {
-            exporter.export(results, outputPath);
-        } catch (IOException e) {
-            System.err.printf("ERROR: Could not write output CSV: %s%n", e.getMessage());
-            return ExitCode.OUTPUT_WRITE_ERROR;
-        }
-        System.out.printf("      Report saved to: %s%n%n", outputPath.toAbsolutePath());
+        int rankedCount;
 
-        ConsoleReporter.printResultsSummary(results);
+        if (isMethodLevel) {
+            if (!coverageData.hasMethodMapping()) {
+                System.err.printf("ERROR: Method mapping not available. Cannot aggregate to method level.%n");
+                return ExitCode.GENERAL_ERROR;
+            }
+            MethodAggregator aggregator = new MethodAggregator();
+            List<MethodSuspiciousnessResult> methodResults = aggregator.aggregate(
+                    results, coverageData.methodMapping(), useAverageRank);
+            rankedCount = methodResults.size();
+            System.out.printf("      Aggregated %d line(s) into %d method(s).%n", results.size(), rankedCount);
+
+            try {
+                exporter.exportMethods(methodResults, outputPath);
+            } catch (IOException e) {
+                System.err.printf("ERROR: Could not write output CSV: %s%n", e.getMessage());
+                return ExitCode.OUTPUT_WRITE_ERROR;
+            }
+            System.out.printf("      Report saved to: %s%n%n", outputPath.toAbsolutePath());
+
+            ConsoleReporter.printMethodResultsSummary(methodResults);
+        } else {
+            rankedCount = results.size();
+            try {
+                exporter.export(results, outputPath);
+            } catch (IOException e) {
+                System.err.printf("ERROR: Could not write output CSV: %s%n", e.getMessage());
+                return ExitCode.OUTPUT_WRITE_ERROR;
+            }
+            System.out.printf("      Report saved to: %s%n%n", outputPath.toAbsolutePath());
+
+            ConsoleReporter.printResultsSummary(results);
+        }
+
         if (isOchiaiMS) {
             ConsoleReporter.printTimingSummaryMS(testExecTimeMs, mutationTimeMs, ochiaiTimeMs);
         } else {
@@ -323,7 +397,9 @@ public class Main implements Callable<Integer> {
         }
 
         long totalMs = testExecTimeMs + mutationTimeMs + ochiaiTimeMs;
-        progress(String.format("Done. %d line(s) ranked in %s.", results.size(), ConsoleReporter.formatDuration(totalMs)));
+        progress(String.format("Done. %d %s ranked in %s.", rankedCount,
+                isMethodLevel ? "method(s)" : "line(s)",
+                ConsoleReporter.formatDuration(totalMs)));
 
         return ExitCode.SUCCESS;
     }
