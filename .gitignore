@@ -23,5 +23,6 @@ Thumbs.db
 # Build outputs
 bin/
 
-# Test subject (local testing only)
+# Test subjects (local testing only)
 test-subject/
+test-subject-jdk11/
