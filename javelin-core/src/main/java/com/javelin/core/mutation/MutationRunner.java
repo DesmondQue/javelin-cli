@@ -288,7 +288,8 @@ public class MutationRunner {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 String fileName = file.getFileName().toString();
-                if (fileName.endsWith("Test.class") || fileName.endsWith("Tests.class")) {
+                if (fileName.endsWith("Test.class") || fileName.endsWith("Tests.class")
+                        || fileName.endsWith("TestCase.class")) {
                     Path relative = dir.relativize(file);
                     String className = relative.toString()
                             .replace(".class", "")

@@ -98,20 +98,31 @@ public class CoverageRunner {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 String fileName = file.getFileName().toString();
-                if (fileName.endsWith("Test.class") || fileName.endsWith("Tests.class")) {
-                    // Convert file path to fully qualified class name
-                    Path relativePath = dir.relativize(file);
-                    String className = relativePath.toString()
-                            .replace(".class", "")
-                            .replace(java.io.File.separatorChar, '.')
-                            .replace('/', '.');
-                    testClasses.add(className);
+                if (fileName.endsWith("Test.class") || fileName.endsWith("Tests.class")
+                        || fileName.endsWith("TestCase.class")) {
+                    if (!isAbstractClass(file)) {
+                        Path relativePath = dir.relativize(file);
+                        String className = relativePath.toString()
+                                .replace(".class", "")
+                                .replace(java.io.File.separatorChar, '.')
+                                .replace('/', '.');
+                        testClasses.add(className);
+                    }
                 }
                 return FileVisitResult.CONTINUE;
             }
         });
         
         return testClasses;
+    }
+
+    private boolean isAbstractClass(Path classFile) {
+        try (var is = Files.newInputStream(classFile)) {
+            ClassReader cr = new ClassReader(is);
+            return (cr.getAccess() & Opcodes.ACC_ABSTRACT) != 0;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**
@@ -124,33 +135,39 @@ public class CoverageRunner {
      * @throws IOException if class file cannot be read
      */
     private List<String> findTestMethods(Path testDir, String className) throws IOException {
-        List<String> testMethods = new ArrayList<>();
         String classFilePath = className.replace('.', java.io.File.separatorChar) + ".class";
         Path classFile = testDir.resolve(classFilePath);
-        
+
         if (!Files.exists(classFile)) {
             classFile = testDir.resolve(className + ".class");
         }
-        
+
         if (!Files.exists(classFile)) {
             System.err.println("      WARNING: Could not find class file for " + className);
-            return testMethods;
+            return new ArrayList<>();
         }
-        
+
+        List<String> annotatedMethods = new ArrayList<>();
+        List<String> junit3Candidates = new ArrayList<>();
+
         try (FileInputStream fis = new FileInputStream(classFile.toFile())) {
             ClassReader classReader = new ClassReader(fis);
-            
+
             classReader.accept(new ClassVisitor(Opcodes.ASM9) {
                 @Override
                 public MethodVisitor visitMethod(int access, String name, String descriptor,
                                                   String signature, String[] exceptions) {
-                    // Return a MethodVisitor that checks for @Test annotation
+                    if (name.startsWith("test") && descriptor.equals("()V")
+                            && (access & Opcodes.ACC_PUBLIC) != 0) {
+                        junit3Candidates.add(name);
+                    }
+
                     return new MethodVisitor(Opcodes.ASM9) {
                         @Override
-                        public AnnotationVisitor visitAnnotation(String annotationDescriptor, boolean visible) {
-                            if (annotationDescriptor.equals("Lorg/junit/jupiter/api/Test;") ||
-                                annotationDescriptor.equals("Lorg/junit/Test;")) {
-                                testMethods.add(name);
+                        public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
+                            if (desc.equals("Lorg/junit/jupiter/api/Test;")
+                                    || desc.equals("Lorg/junit/Test;")) {
+                                annotatedMethods.add(name);
                             }
                             return null;
                         }
@@ -158,8 +175,8 @@ public class CoverageRunner {
                 }
             }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         }
-        
-        return testMethods;
+
+        return annotatedMethods.isEmpty() ? junit3Candidates : annotatedMethods;
     }
 
     /**

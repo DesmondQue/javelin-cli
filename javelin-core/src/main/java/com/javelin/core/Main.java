@@ -208,6 +208,8 @@ public class Main implements Callable<Integer> {
             return pathValidation;
         }
 
+        checkBytecodeVersion();
+
         boolean isOchiaiMS = algo.equals("ochiai-ms");
         int totalSteps = isOchiaiMS ? 8 : 5;
         ConsoleReporter.printInputSummary(totalSteps,
@@ -444,5 +446,31 @@ public class Main implements Callable<Integer> {
         }
 
         return ExitCode.SUCCESS;
+    }
+
+    private void checkBytecodeVersion() {
+        try {
+            Path firstClass = Files.walk(targetPath)
+                    .filter(p -> p.toString().endsWith(".class"))
+                    .findFirst()
+                    .orElse(null);
+            if (firstClass == null) return;
+
+            byte[] header = new byte[8];
+            try (var is = Files.newInputStream(firstClass)) {
+                if (is.read(header) < 8) return;
+            }
+            int targetMajor = ((header[6] & 0xFF) << 8) | (header[7] & 0xFF);
+            int runtimeMajor = 44 + Runtime.version().feature();
+
+            if (jvmHome == null && targetMajor < runtimeMajor) {
+                int targetJava = targetMajor - 44;
+                System.err.printf("WARNING: Target classes compiled for Java %d (bytecode %d) "
+                        + "but running on Java %d. Consider --jvm-home for correct test behavior.%n%n",
+                        targetJava, targetMajor, Runtime.version().feature());
+            }
+        } catch (IOException e) {
+            // Non-fatal — skip check
+        }
     }
 }
