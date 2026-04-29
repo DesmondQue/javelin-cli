@@ -17,7 +17,7 @@ Where:
 javelin -a ochiai -t build/classes/java/main -T build/classes/java/test -o report.csv
 ```
 
-## Ochiai-MS (Mutation Score weighted) — ⚠️ Experimental
+## Ochiai-MS (Mutation Score weighted) -- ⚠️ Experimental
 
 > **This algorithm is experimental.** It is a novel research contribution exploring the integration of mutation testing into SBFL. Results may differ from standard Ochiai and the approach is under active evaluation.
 

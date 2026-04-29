@@ -23,10 +23,10 @@ Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javeli
 
 Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) coverage, builds a spectrum hit matrix from the results, and applies fault localization algorithms to produce a ranked list of suspicious lines. Two algorithms are supported:
 
-- **Ochiai** — Standard SBFL ranking using pass/fail spectrum data.
-- **Ochiai-MS** — Enhanced Ochiai that weights passing tests by their mutation-killing strength via [PITest](https://pitest.org/) analysis.
-- **Method-level aggregation** — Post-scoring aggregation from line to method granularity, comparable to GZoltar and SBFL evaluation literature.
-- **Average (MID) ranking** — Fractional ranking for tied scores, standard in SBFL evaluation (Sarhan & Beszedes 2020).
+- **Ochiai** -- Standard SBFL ranking using pass/fail spectrum data.
+- **Ochiai-MS** -- Enhanced Ochiai that weights passing tests by their mutation-killing strength via [PITest](https://pitest.org/) analysis.
+- **Method-level aggregation** -- Post-scoring aggregation from line to method granularity, comparable to GZoltar and SBFL evaluation literature.
+- **Average (MID) ranking** -- Fractional ranking for tied scores, standard in SBFL evaluation (Sarhan & Beszedes 2020).
 
 ---
 
@@ -35,7 +35,7 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 | Requirement | Version | Install Guide |
 |---|---|---|
 | **Java JDK** | 21 or later | [Eclipse Temurin](https://adoptium.net/), [Oracle JDK](https://www.oracle.com/java/technologies/downloads/), [Amazon Corretto](https://aws.amazon.com/corretto/), or any OpenJDK 21+ distribution |
-| **Gradle** | 8.5+ *(optional — wrapper included)* | [gradle.org/install](https://gradle.org/install/) |
+| **Gradle** | 8.5+ *(optional -- wrapper included)* | [gradle.org/install](https://gradle.org/install/) |
 
 > **Note:** Any Java 21+ JDK works (Temurin, Oracle, Corretto, GraalVM, etc.). Ensure `java -version` reports 21 or higher, or set `JAVA_HOME` to your JDK 21 installation.
 
@@ -147,20 +147,20 @@ javelin -t build/classes/java/main \
 | Flag | Long Form | Required | Default | Description |
 |---|---|---|---|---|
 | `-a` | `--algorithm` | No | `ochiai` | Fault localization algorithm: `ochiai` or `ochiai-ms` |
-| `-t` | `--target` | **Yes** | — | Path to compiled application classes (e.g., `build/classes/java/main`) |
-| `-T` | `--test` | **Yes** | — | Path to compiled test classes (e.g., `build/classes/java/test`) |
-| `-o` | `--output` | **Yes** | — | Output CSV file path for the suspiciousness report |
-| `-s` | `--source` | Only for `ochiai-ms` | — | Path to Java source files (needed by PITest for mutation analysis) |
-| `-c` | `--classpath` | No | — | Additional classpath entries (JARs or directories) |
+| `-t` | `--target` | **Yes** | -- | Path to compiled application classes (e.g., `build/classes/java/main`) |
+| `-T` | `--test` | **Yes** | -- | Path to compiled test classes (e.g., `build/classes/java/test`) |
+| `-o` | `--output` | **Yes** | -- | Output CSV file path for the suspiciousness report |
+| `-s` | `--source` | Only for `ochiai-ms` | -- | Path to Java source files (needed by PITest for mutation analysis) |
+| `-c` | `--classpath` | No | -- | Additional classpath entries (JARs or directories) |
 | `-j` | `--threads` | No | CPU core count | Number of parallel threads for test execution |
 | `-g` | `--granularity` | No | `statement` | Output granularity: `statement` or `method` |
 | | `--ranking` | No | `dense` | Ranking strategy: `dense` (recommended) or `average` (for evaluation) |
 | | `--offline` | No | `false` | Offline bytecode instrumentation (avoids agent conflicts) |
 | | `--pitest-threads` | No | CPU core count | Parallel threads for PITest mutation analysis (ochiai-ms only) |
-| | `--jvm-home` | No | — | JVM home directory for test subprocesses |
+| | `--jvm-home` | No | -- | JVM home directory for test subprocesses |
 | `-q` | `--quiet` | No | `false` | Suppress progress output |
-| `-h` | `--help` | — | — | Show help message and exit |
-| `-V` | `--version` | — | — | Print version information and exit |
+| `-h` | `--help` | -- | -- | Show help message and exit |
+| `-V` | `--version` | -- | -- | Print version information and exit |
 
 ### Requirements
 
@@ -204,7 +204,7 @@ When `-g method` is specified, line-level scores are aggregated to method-level 
 ### Ranking Strategies
 
 - **Dense** (default): tied scores share the same rank. `[1, 2, 2, 3]`
-- **Average (MID)**: tied scores receive the mean of their ordinal positions. `[1.0, 2.5, 2.5, 4.0]` — standard in SBFL evaluation literature.
+- **Average (MID)**: tied scores receive the mean of their ordinal positions. `[1.0, 2.5, 2.5, 4.0]` -- standard in SBFL evaluation literature.
 
 ---
 
