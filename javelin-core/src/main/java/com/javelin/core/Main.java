@@ -32,6 +32,7 @@ import com.javelin.core.validation.AgentConflictDetector;
 import com.javelin.core.validation.SbflPreconditions;
 
 import picocli.CommandLine;
+import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -60,16 +61,8 @@ import picocli.CommandLine.Option;
         ""
     },
     descriptionHeading = "%n",
-    optionListHeading = "%nOptions:%n",
+    optionListHeading = "%n",
     footer = {
-        "",
-        "Algorithms:",
-        "  ochiai      Ochiai SBFL (default)",
-        "  ochiai-ms   Ochiai weighted by mutation score (needs -s)",
-        "",
-        "Granularity (-g) and ranking:",
-        "  statement   Line-level output (default)",
-        "  method      Method-level output; --ranking: dense (default) or average",
         "",
         "Examples:",
         "  javelin -t classes/main -T classes/test -o report.csv",
@@ -82,60 +75,94 @@ import picocli.CommandLine.Option;
 )
 public class Main implements Callable<Integer> {
 
-    @Option(names = {"-t", "--target"}, required = true, paramLabel = "<dir>", order = 0,
-            description = "Compiled classes directory")
-    private Path targetPath;
+    @ArgGroup(validate = false, heading = "%nRequired:%n")
+    private final RequiredOpts required = new RequiredOpts();
 
-    @Option(names = {"-T", "--test"}, required = true, paramLabel = "<dir>", order = 1,
-            description = "Test classes directory")
-    private Path testPath;
+    @ArgGroup(validate = false, heading = "%nAlgorithm:%n")
+    private final AlgorithmOpts algorithmOpts = new AlgorithmOpts();
 
-    @Option(names = {"-o", "--output"}, required = true, paramLabel = "<file>", order = 2,
-            description = "Output CSV file path")
-    private Path outputPath;
+    @ArgGroup(validate = false, heading = "%nExecution:%n")
+    private final ExecutionOpts executionOpts = new ExecutionOpts();
 
-    @Option(names = {"-a", "--algorithm"}, required = false, paramLabel = "<name>", order = 3,
-            description = "ochiai (default) or ochiai-ms")
-    private String algorithm = "ochiai";
+    static class RequiredOpts {
+        @Option(names = {"-t", "--target"}, required = true, paramLabel = "<dir>", order = 0,
+                description = "Compiled classes directory")
+        Path targetPath;
 
-    @Option(names = {"-s", "--source"}, required = false, paramLabel = "<dir>", order = 4,
-            description = "Source directory (required for ochiai-ms)")
-    private Path sourcePath;
+        @Option(names = {"-T", "--test"}, required = true, paramLabel = "<dir>", order = 1,
+                description = "Test classes directory")
+        Path testPath;
 
-    @Option(names = {"-c", "--classpath"}, required = false, paramLabel = "<path>", order = 5,
-            description = "Additional classpath entries")
-    private String additionalClasspath;
+        @Option(names = {"-o", "--output"}, required = true, paramLabel = "<file>", order = 2,
+                description = "Output CSV file path")
+        Path outputPath;
+    }
 
-    @Option(names = {"-j", "--threads"}, required = false, paramLabel = "<count>", order = 6,
-            description = "Parallel threads (default: CPU cores)")
-    private int threadCount = Runtime.getRuntime().availableProcessors();
+    static class AlgorithmOpts {
+        @Option(names = {"-a", "--algorithm"}, paramLabel = "<name>", order = 3,
+                description = "ochiai (default) or ochiai-ms")
+        String algorithm = "ochiai";
 
-    @Option(names = {"--pitest-threads"}, required = false, paramLabel = "<count>", order = 7,
-            description = "PITest threads (default: CPU cores)")
-    private int pitestThreadCount = Runtime.getRuntime().availableProcessors();
+        @Option(names = {"-s", "--source"}, paramLabel = "<dir>", order = 4,
+                description = "Source directory (required for ochiai-ms)")
+        Path sourcePath;
 
-    @Option(names = {"--offline"}, required = false, order = 8,
-            description = "Offline instrumentation (avoids agent conflicts)")
-    private boolean offlineMode = false;
+        @Option(names = {"-g", "--granularity"}, paramLabel = "<level>", order = 5,
+                description = "statement (default) or method")
+        String granularity = "statement";
 
-    @Option(names = {"-q", "--quiet"}, required = false, order = 9,
-            description = "Suppress progress output")
-    private boolean quiet = false;
+        @Option(names = {"--ranking"}, paramLabel = "<strategy>", order = 6,
+                description = "dense (default) or average")
+        String rankingStrategy = "dense";
+    }
 
-    @Option(names = {"-g", "--granularity"}, required = false, paramLabel = "<level>", order = 10,
-            description = "Output granularity: statement (default) or method")
-    private String granularity = "statement";
+    static class ExecutionOpts {
+        @Option(names = {"-j", "--threads"}, paramLabel = "<count>", order = 7,
+                description = "Parallel threads (default: CPU cores)")
+        int threadCount = Runtime.getRuntime().availableProcessors();
 
-    @Option(names = {"--ranking"}, required = false, paramLabel = "<strategy>", order = 11,
-            description = "Ranking strategy: dense (default) or average")
-    private String rankingStrategy = "dense";
+        @Option(names = {"--pitest-threads"}, paramLabel = "<count>", order = 8,
+                description = "PITest threads (default: CPU cores)")
+        int pitestThreadCount = Runtime.getRuntime().availableProcessors();
 
-    @Option(names = {"--jvm-home"}, required = false, paramLabel = "<path>", order = 12,
-            description = "JVM home to use for test execution subprocesses (default: current JVM)")
-    private Path jvmHome = null;
+        @Option(names = {"--jvm-home"}, paramLabel = "<path>", order = 9,
+                description = "JVM home for test subprocesses")
+        Path jvmHome = null;
+
+        @Option(names = {"--offline"}, order = 10,
+                description = "Offline instrumentation (avoids agent conflicts)")
+        boolean offlineMode = false;
+
+        @Option(names = {"-c", "--classpath"}, paramLabel = "<path>", order = 11,
+                description = "Additional classpath entries")
+        String additionalClasspath;
+
+        @Option(names = {"-q", "--quiet"}, order = 12,
+                description = "Suppress progress output")
+        boolean quiet = false;
+    }
+
+    private Path targetPath() { return required.targetPath; }
+    private Path testPath() { return required.testPath; }
+    private Path outputPath() { return required.outputPath; }
+    private String algorithm() { return algorithmOpts.algorithm; }
+    private Path sourcePath() { return algorithmOpts.sourcePath; }
+    private String granularity() { return algorithmOpts.granularity; }
+    private String rankingStrategy() { return algorithmOpts.rankingStrategy; }
+    private int threadCount() { return executionOpts.threadCount; }
+    private int pitestThreadCount() { return executionOpts.pitestThreadCount; }
+    private Path jvmHome() { return executionOpts.jvmHome; }
+    private boolean offlineMode() { return executionOpts.offlineMode; }
+    private void setOfflineMode(boolean v) { executionOpts.offlineMode = v; }
+    private String additionalClasspath() { return executionOpts.additionalClasspath; }
+    private boolean quiet() { return executionOpts.quiet; }
 
     private void progress(String msg) {
-        if (!quiet) System.err.printf("[javelin] %s%n", msg);
+        if (!quiet()) System.err.printf("[javelin] %s%n", msg);
+    }
+
+    private void stat(String key, Object value) {
+        System.err.printf("[javelin-stat] %s=%s%n", key, value);
     }
 
     public static void main(String[] args) {
@@ -152,15 +179,15 @@ public class Main implements Callable<Integer> {
         System.out.printf("+===============================================================+%n%n");
 
         //step 0: validate algorithm selection
-        String algo = algorithm.toLowerCase().trim();
+        String algo = algorithm().toLowerCase().trim();
         if (!algo.equals("ochiai") && !algo.equals("ochiai-ms")) {
-            System.err.printf("ERROR: Unknown algorithm '%s'. Valid options: ochiai, ochiai-ms%n", algorithm);
+            System.err.printf("ERROR: Unknown algorithm '%s'. Valid options: ochiai, ochiai-ms%n", algorithm());
             return ExitCode.GENERAL_ERROR;
         }
 
         if (algo.equals("ochiai-ms")) {
             System.out.printf("  Algorithm: Ochiai-MS (Mutation Score weighted)%n%n");
-            if (sourcePath == null) {
+            if (sourcePath() == null) {
                 System.err.printf("ERROR: --source/-s is required for ochiai-ms (PITest needs source dirs).%n");
                 return ExitCode.GENERAL_ERROR;
             }
@@ -169,34 +196,27 @@ public class Main implements Callable<Integer> {
         }
 
         //step 0b: validate granularity and ranking
-        String gran = granularity.toLowerCase().trim();
+        String gran = granularity().toLowerCase().trim();
         if (!gran.equals("statement") && !gran.equals("method")) {
-            System.err.printf("ERROR: Unknown granularity '%s'. Valid options: statement, method%n", granularity);
+            System.err.printf("ERROR: Unknown granularity '%s'. Valid options: statement, method%n", granularity());
             return ExitCode.GENERAL_ERROR;
         }
-        String ranking = rankingStrategy.toLowerCase().trim();
+        String ranking = rankingStrategy().toLowerCase().trim();
         if (!ranking.equals("dense") && !ranking.equals("average")) {
-            System.err.printf("ERROR: Unknown ranking strategy '%s'. Valid options: dense, average%n", rankingStrategy);
+            System.err.printf("ERROR: Unknown ranking strategy '%s'. Valid options: dense, average%n", rankingStrategy());
             return ExitCode.GENERAL_ERROR;
         }
         boolean isMethodLevel = gran.equals("method");
         boolean useAverageRank = ranking.equals("average");
 
-        if (useAverageRank && !isMethodLevel) {
-            System.err.printf("WARNING: --ranking average is only supported with -g method. Using dense ranking.%n%n");
-            useAverageRank = false;
-        }
-
-        if (isMethodLevel) {
-            System.out.printf("  Granularity: Method-level (max-score aggregation)%n");
-            System.out.printf("  Ranking: %s%n%n", useAverageRank ? "Average (MID)" : "Dense");
-        }
+        System.out.printf("  Granularity: %s%n", isMethodLevel ? "Method-level (max-score aggregation)" : "Statement-level");
+        System.out.printf("  Ranking: %s%n%n", useAverageRank ? "Average (MID)" : "Dense");
 
         //step 0c: validate --jvm-home if provided
-        if (jvmHome != null) {
-            Path javaBin = jvmHome.resolve(ProcessExecutor.isWindows() ? "bin/java.exe" : "bin/java");
+        if (jvmHome() != null) {
+            Path javaBin = jvmHome().resolve(ProcessExecutor.isWindows() ? "bin/java.exe" : "bin/java");
             if (!Files.exists(javaBin)) {
-                System.err.printf("ERROR: --jvm-home '%s' does not contain bin/java%n", jvmHome);
+                System.err.printf("ERROR: --jvm-home '%s' does not contain bin/java%n", jvmHome());
                 return ExitCode.GENERAL_ERROR;
             }
             System.out.printf("  Test JVM: %s%n%n", javaBin.toAbsolutePath());
@@ -213,33 +233,35 @@ public class Main implements Callable<Integer> {
         boolean isOchiaiMS = algo.equals("ochiai-ms");
         int totalSteps = isOchiaiMS ? 8 : 5;
         ConsoleReporter.printInputSummary(totalSteps,
-                targetPath.toAbsolutePath().toString(),
-                testPath.toAbsolutePath().toString(),
-                outputPath.toAbsolutePath().toString(),
-                additionalClasspath);
+                targetPath().toAbsolutePath().toString(),
+                testPath().toAbsolutePath().toString(),
+                outputPath().toAbsolutePath().toString(),
+                additionalClasspath());
 
         //step 2: run tests with JaCoCo coverage
         // Auto-detect agent conflicts and switch to offline mode if needed
-        if (!offlineMode) {
+        if (!offlineMode()) {
             List<AgentConflictDetector.Conflict> conflicts =
-                    AgentConflictDetector.detect(additionalClasspath);
+                    AgentConflictDetector.detect(additionalClasspath());
             if (!conflicts.isEmpty()) {
-                System.out.printf("  [AUTO] Agent conflict(s) detected on classpath — switching to offline instrumentation mode:%n");
+                System.out.printf("  [AUTO] Agent conflict(s) detected on classpath -- switching to offline instrumentation mode:%n");
                 for (AgentConflictDetector.Conflict c : conflicts) {
-                    System.out.printf("         • %s: %s%n", c.jarName(), c.reason());
+                    System.out.printf("         * %s: %s%n", c.jarName(), c.reason());
                 }
                 System.out.printf("         (use --offline explicitly to suppress this message)%n%n");
-                offlineMode = true;
+                setOfflineMode(true);
             }
         }
         System.out.printf("[2/%d] Running tests with coverage instrumentation%s...%n",
-                totalSteps, offlineMode ? " (offline mode)" : "");
-        progress("Running tests with coverage instrumentation" + (offlineMode ? " (offline mode)" : "") + "...");
+                totalSteps, offlineMode() ? " (offline mode)" : "");
+        progress("Running tests with coverage instrumentation" + (offlineMode() ? " (offline mode)" : "") + "...");
         long testExecStart = System.nanoTime();
-        CoverageRunner coverageRunner = new CoverageRunner(targetPath, testPath, additionalClasspath, offlineMode, quiet, jvmHome);
+        CoverageRunner coverageRunner = new CoverageRunner(targetPath(), testPath(), additionalClasspath(), offlineMode(), quiet(), jvmHome());
         List<TestExecResult> testExecResults = coverageRunner.run();
         long testExecTimeMs = (System.nanoTime() - testExecStart) / 1_000_000;
         
+        stat("time.test_exec_ms", testExecTimeMs);
+
         if (testExecResults == null || testExecResults.isEmpty()) {
             System.err.printf("ERROR: Coverage execution failed. No .exec files generated.%n");
             return ExitCode.COVERAGE_FAILED;
@@ -255,9 +277,15 @@ public class Main implements Callable<Integer> {
         progress("Parsing coverage data...");
         System.out.printf("[3/%d] Parsing coverage data...%n", totalSteps);
         DataParser dataParser = new DataParser();
-        CoverageData coverageData = dataParser.parseMultiple(testExecResults, targetPath);
+        CoverageData coverageData = dataParser.parseMultiple(testExecResults, targetPath());
         
         ConsoleReporter.printCoverageSummary(coverageData);
+
+        stat("tests.total", coverageData.getTestCount());
+        stat("tests.passed", coverageData.getPassedCount());
+        stat("tests.failed", coverageData.getFailedCount());
+        stat("lines.tracked", coverageData.getTotalLinesTracked());
+        stat("lines.covered", coverageData.getCoveredLineCount());
 
         SbflPreconditions.ValidationResult validation = SbflPreconditions.evaluate(
                 coverageData.getPassedCount(),
@@ -304,7 +332,7 @@ public class Main implements Callable<Integer> {
             progress("Running PITest mutation analysis...");
             System.out.printf("[5/8] Running scoped mutation analysis (PITest)...%n");
             MutationRunner mutationRunner = new MutationRunner(
-                    targetPath, testPath, sourcePath, additionalClasspath, pitestThreadCount, coverageData, quiet, jvmHome);
+                    targetPath(), testPath(), sourcePath(), additionalClasspath(), pitestThreadCount(), coverageData, quiet(), jvmHome());
             Path reportDir;
             try {
                 reportDir = mutationRunner.run(faultRegion.targetClassNames());
@@ -319,6 +347,11 @@ public class Main implements Callable<Integer> {
             MutationDataParser mutationDataParser = new MutationDataParser();
             MutationData mutationData = mutationDataParser.parse(reportDir);
 
+            stat("mutants.total", mutationData.mutants().size());
+            stat("mutants.killed", mutationData.getKilledCount());
+            stat("mutants.survived", mutationData.getSurvivedCount());
+            stat("mutants.no_coverage", mutationData.getNoCoverageCount());
+
             System.out.printf("      Mutants: %d total (%d killed, %d survived, %d no coverage).%n",
                     mutationData.mutants().size(),
                     mutationData.getKilledCount(),
@@ -332,6 +365,7 @@ public class Main implements Callable<Integer> {
             Map<String, Double> mutationScores = msCalculator.calculate(mutationData, coverageData);
 
             mutationTimeMs = (System.nanoTime() - mutationStart) / 1_000_000;
+            stat("time.mutation_ms", mutationTimeMs);
 
             // Print mutation score summary
             if (!mutationScores.isEmpty()) {
@@ -348,8 +382,9 @@ public class Main implements Callable<Integer> {
             System.out.printf("[8/8] Calculating Ochiai-MS suspiciousness scores...%n");
             long ochiaiMSStart = System.nanoTime();
             OchiaiMSCalculator ochiaiMSCalc = new OchiaiMSCalculator();
-            results = ochiaiMSCalc.calculate(matrix, coverageData, mutationScores);
+            results = ochiaiMSCalc.calculate(matrix, coverageData, mutationScores, useAverageRank);
             ochiaiTimeMs = (System.nanoTime() - ochiaiMSStart) / 1_000_000;
+            stat("time.ochiai_ms", ochiaiTimeMs);
             System.out.printf("      Calculated Ochiai-MS suspiciousness for %d line(s).%n%n", results.size());
 
         } else {
@@ -357,13 +392,14 @@ public class Main implements Callable<Integer> {
             progress("Calculating Ochiai suspiciousness scores...");
             long ochiaiStart = System.nanoTime();
             OchiaiCalculator calculator = new OchiaiCalculator();
-            results = calculator.calculate(matrix);
+            results = calculator.calculate(matrix, useAverageRank);
             ochiaiTimeMs = (System.nanoTime() - ochiaiStart) / 1_000_000;
+            stat("time.ochiai_ms", ochiaiTimeMs);
             System.out.printf("      Calculated suspiciousness for %d line(s).%n%n", results.size());
         }
 
         //export to CSV
-        progress("Writing results to " + outputPath + "...");
+        progress("Writing results to " + outputPath() + "...");
         System.out.printf("[%d/%d] Exporting results to CSV...%n", totalSteps, totalSteps);
         CsvExporter exporter = new CsvExporter();
         int rankedCount;
@@ -380,23 +416,23 @@ public class Main implements Callable<Integer> {
             System.out.printf("      Aggregated %d line(s) into %d method(s).%n", results.size(), rankedCount);
 
             try {
-                exporter.exportMethods(methodResults, outputPath);
+                exporter.exportMethods(methodResults, outputPath());
             } catch (IOException e) {
                 System.err.printf("ERROR: Could not write output CSV: %s%n", e.getMessage());
                 return ExitCode.OUTPUT_WRITE_ERROR;
             }
-            System.out.printf("      Report saved to: %s%n%n", outputPath.toAbsolutePath());
+            System.out.printf("      Report saved to: %s%n%n", outputPath().toAbsolutePath());
 
             ConsoleReporter.printMethodResultsSummary(methodResults);
         } else {
             rankedCount = results.size();
             try {
-                exporter.export(results, outputPath);
+                exporter.export(results, outputPath());
             } catch (IOException e) {
                 System.err.printf("ERROR: Could not write output CSV: %s%n", e.getMessage());
                 return ExitCode.OUTPUT_WRITE_ERROR;
             }
-            System.out.printf("      Report saved to: %s%n%n", outputPath.toAbsolutePath());
+            System.out.printf("      Report saved to: %s%n%n", outputPath().toAbsolutePath());
 
             ConsoleReporter.printResultsSummary(results);
         }
@@ -419,23 +455,23 @@ public class Main implements Callable<Integer> {
       Returns ExitCode.SUCCESS (0) on success, or a specific ExitCode on failure.
      */
     private int validatePaths() {
-        if (!Files.exists(targetPath)) {
-            System.err.printf("ERROR: Target path does not exist: %s%n", targetPath);
+        if (!Files.exists(targetPath())) {
+            System.err.printf("ERROR: Target path does not exist: %s%n", targetPath());
             return ExitCode.TARGET_NOT_FOUND;
-        } else if (!Files.isDirectory(targetPath)) {
-            System.err.printf("ERROR: Target path is not a directory: %s%n", targetPath);
+        } else if (!Files.isDirectory(targetPath())) {
+            System.err.printf("ERROR: Target path is not a directory: %s%n", targetPath());
             return ExitCode.TARGET_NOT_FOUND;
         }
 
-        if (!Files.exists(testPath)) {
-            System.err.printf("ERROR: Test path does not exist: %s%n", testPath);
+        if (!Files.exists(testPath())) {
+            System.err.printf("ERROR: Test path does not exist: %s%n", testPath());
             return ExitCode.TEST_NOT_FOUND;
-        } else if (!Files.isDirectory(testPath)) {
-            System.err.printf("ERROR: Test path is not a directory: %s%n", testPath);
+        } else if (!Files.isDirectory(testPath())) {
+            System.err.printf("ERROR: Test path is not a directory: %s%n", testPath());
             return ExitCode.TEST_NOT_FOUND;
         }
 
-        Path outputDir = outputPath.getParent();
+        Path outputDir = outputPath().getParent();
         if (outputDir != null && !Files.exists(outputDir)) {
             try {
                 Files.createDirectories(outputDir);
@@ -450,7 +486,7 @@ public class Main implements Callable<Integer> {
 
     private void checkBytecodeVersion() {
         try {
-            Path firstClass = Files.walk(targetPath)
+            Path firstClass = Files.walk(targetPath())
                     .filter(p -> p.toString().endsWith(".class"))
                     .findFirst()
                     .orElse(null);
@@ -463,14 +499,14 @@ public class Main implements Callable<Integer> {
             int targetMajor = ((header[6] & 0xFF) << 8) | (header[7] & 0xFF);
             int runtimeMajor = 44 + Runtime.version().feature();
 
-            if (jvmHome == null && targetMajor < runtimeMajor) {
+            if (jvmHome() == null && targetMajor < runtimeMajor) {
                 int targetJava = targetMajor - 44;
                 System.err.printf("WARNING: Target classes compiled for Java %d (bytecode %d) "
                         + "but running on Java %d. Consider --jvm-home for correct test behavior.%n%n",
                         targetJava, targetMajor, Runtime.version().feature());
             }
         } catch (IOException e) {
-            // Non-fatal — skip check
+            // Non-fatal
         }
     }
 }

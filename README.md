@@ -2,7 +2,7 @@
 
 Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javelin analyzes test pass/fail data and code coverage to rank lines of code by suspiciousness, helping you find bugs faster.
 
-Javelin supports both **statement-level** (line) and **method-level** output granularity. Statement-level is the default, suitable for IDE integration (e.g., IntelliJ plugin line highlighting). Method-level aggregation (`-g method`) produces results comparable to SBFL evaluation literature (GZoltar, Defects4J benchmarks), with support for **dense** and **average (MID)** ranking strategies.
+Javelin supports both **statement-level** (line) and **method-level** output granularity, each with **dense** and **average (MID)** ranking strategies. Statement-level with dense ranking is the default and recommended for interactive debugging (e.g., IntelliJ plugin). Average ranking at either granularity level is intended for SBFL evaluation -- computing EXAM scores and Top-N metrics per Pearson et al. (ICSE 2017) and Sarhan & Beszedes (2023).
 
 Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS**, an **experimental** algorithm that integrates mutation testing into the SBFL pipeline. Ochiai-MS is a novel contribution of the research study overseeing the development of Javelin, exploring whether mutation score–weighted test spectra can improve fault localization accuracy.
 
@@ -67,9 +67,13 @@ javelin -t build/classes/java/main -T build/classes/java/test -o report.csv
 javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method
 ```
 
-**Method-level with average ranking (matches SBFL literature conventions):**
+**Average ranking for EXAM score evaluation (works with both granularity levels):**
 
 ```bash
+# Statement-level average ranking (Pearson et al., ICSE 2017)
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv --ranking average
+
+# Method-level average ranking (Sarhan & Beszedes 2023)
 javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method --ranking average
 ```
 
@@ -105,14 +109,17 @@ javelin -t build/classes/java/main \
 | `-s` | `--source` | Only for `ochiai-ms` | — | Path to Java source files (for PITest) |
 | `-c` | `--classpath` | No | — | Additional classpath entries |
 | `-j` | `--threads` | No | CPU cores | Parallel threads for test execution |
-| `-g` | `--granularity` | No | `statement` | Output granularity: `statement` or `method` |
-| | `--ranking` | No | `dense` | Ranking strategy: `dense` or `average` (only with `-g method`) |
+| `-g` | `--granularity` | No | `statement` | Output granularity: `statement` (recommended) or `method` (for evaluation) |
+| | `--ranking` | No | `dense` | Ranking strategy: `dense` (recommended) or `average` (for evaluation) |
 | | `--offline` | No | `false` | Offline bytecode instrumentation (auto-enabled on agent conflicts) |
+| | `--pitest-threads` | No | CPU cores | Parallel threads for PITest mutation analysis (ochiai-ms only) |
+| | `--jvm-home` | No | — | JVM home directory for test subprocesses |
+| `-q` | `--quiet` | No | `false` | Suppress progress output |
 | `-h` | `--help` | — | — | Show help message |
 | `-V` | `--version` | — | — | Print version |
 
 - **At least one failing test** is required (nothing to localize if all pass).
-- `--ranking average` is only valid with `-g method`. Using it with statement-level output produces a warning.
+- `--ranking average` produces fractional MID ranks (e.g., 2.5) for EXAM score evaluation. Dense ranking is recommended for interactive debugging.
 
 ---
 

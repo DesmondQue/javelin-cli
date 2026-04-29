@@ -26,7 +26,7 @@ import com.javelin.core.model.SuspiciousnessResult;
 public class CsvExporter {
 
     private static final String CSV_HEADER = "FullyQualifiedClass,LineNumber,OchiaiScore,Rank";
-    private static final String CSV_FORMAT = "%s,%d,%.6f,%d";
+    private static final String CSV_FORMAT = "%s,%d,%.6f,%.1f";
 
     private static final String METHOD_CSV_HEADER =
             "FullyQualifiedClass,MethodName,Descriptor,MaxScore,Rank,FirstLine,LastLine";

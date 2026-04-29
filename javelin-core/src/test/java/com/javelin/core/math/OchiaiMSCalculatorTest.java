@@ -73,7 +73,7 @@ class OchiaiMSCalculatorTest {
         List<SuspiciousnessResult> results = calc.calculate(matrix, cd, Map.of("T#pass", 0.0));
 
         assertEquals(10, results.get(0).lineNumber(), "fault line should be ranked first");
-        assertEquals(1, results.get(0).rank());
+        assertEquals(1.0, results.get(0).rank(), 1e-9);
     }
 
     @Test
@@ -102,6 +102,6 @@ class OchiaiMSCalculatorTest {
 
         List<SuspiciousnessResult> results = calc.calculate(matrix, cd, Map.of());
 
-        assertTrue(results.stream().allMatch(r -> r.rank() == 1), "tied scores should share rank 1");
+        assertTrue(results.stream().allMatch(r -> r.rank() == 1.0), "tied scores should share rank 1");
     }
 }

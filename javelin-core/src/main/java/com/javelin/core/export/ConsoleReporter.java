@@ -55,7 +55,7 @@ public final class ConsoleReporter {
             return;
         }
 
-        LinkedHashMap<Integer, List<SuspiciousnessResult>> rankGroups = new LinkedHashMap<>();
+        LinkedHashMap<Double, List<SuspiciousnessResult>> rankGroups = new LinkedHashMap<>();
         for (SuspiciousnessResult r : results) {
             rankGroups.computeIfAbsent(r.rank(), k -> new ArrayList<>()).add(r);
         }
@@ -71,13 +71,13 @@ public final class ConsoleReporter {
         System.out.printf("  Uniqueness (groups/lines): %.2f%%%n%n", uniqueness * 100);
 
         System.out.printf("Suspiciousness Ranking (all groups with score > 0):%n%n");
-        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
-        System.out.printf("| Rank | Score      | Lines | Top-N   | Top Classes                                  |%n");
-        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
+        System.out.printf("+--------+------------+-------+---------+----------------------------------------------+%n");
+        System.out.printf("|   Rank | Score      | Lines | Top-N   | Top Classes                                  |%n");
+        System.out.printf("+--------+------------+-------+---------+----------------------------------------------+%n");
 
         int cumulativeLines = 0;
         for (var entry : rankGroups.entrySet()) {
-            int rank = entry.getKey();
+            double rank = entry.getKey();
             List<SuspiciousnessResult> group = entry.getValue();
             double score = group.get(0).score();
             if (score <= 0.0) break;
@@ -114,10 +114,10 @@ public final class ConsoleReporter {
                 classesShown++;
             }
 
-            System.out.printf("| %4d | %10.4f | %5d | %7d | %-44s |%n",
+            System.out.printf("| %6.1f | %10.4f | %5d | %7d | %-44s |%n",
                     rank, score, group.size(), cumulativeLines, truncate(classSummary.toString(), 44));
         }
-        System.out.printf("+------+------------+-------+---------+----------------------------------------------+%n");
+        System.out.printf("+--------+------------+-------+---------+----------------------------------------------+%n");
         System.out.printf("%n  * Top-N = cumulative lines to inspect at each rank (for Top-N evaluation).%n");
     }
 

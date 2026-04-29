@@ -11,15 +11,27 @@ The default CSV output contains one row per executable line:
 | `FullyQualifiedClass` | string | Fully qualified Java class name |
 | `LineNumber` | int | Line number in the source file |
 | `OchiaiScore` | float | Suspiciousness score (0.0 – 1.0), formatted to 6 decimal places |
-| `Rank` | int | Dense rank (1 = most suspicious). Tied scores share the same rank. |
+| `Rank` | float | Rank value (dense or average, formatted to 1 decimal place). Dense produces integer-like values (1.0, 2.0); average produces fractional values (1.5, 2.5). |
 
 Example:
 
+Example (dense ranking, default):
+
 ```csv
 FullyQualifiedClass,LineNumber,OchiaiScore,Rank
-com.example.Calculator,42,1.000000,1
-com.example.Calculator,38,0.707107,2
-com.example.MathHelper,15,0.500000,3
+com.example.Calculator,42,1.000000,1.0
+com.example.Calculator,38,0.707107,2.0
+com.example.MathHelper,15,0.500000,3.0
+```
+
+Example (average ranking, `--ranking average`):
+
+```csv
+FullyQualifiedClass,LineNumber,OchiaiScore,Rank
+com.example.Calculator,42,1.000000,1.0
+com.example.Calculator,38,0.707107,2.5
+com.example.Calculator,50,0.707107,2.5
+com.example.MathHelper,15,0.500000,4.0
 ```
 
 ## Method-Level CSV (`-g method`)
@@ -124,7 +136,7 @@ Suspiciousness Ranking (all groups with score > 0):
 
 | Column | Description |
 |---|---|
-| **Rank** | Dense rank — tied scores share the same rank. |
+| **Rank** | Dense or average rank (depending on `--ranking`). |
 | **Score** | Ochiai (or Ochiai-MS) suspiciousness score for this tier. |
 | **Lines** | Number of lines sharing this exact score. |
 | **Top-N** | Cumulative lines inspected up to and including this rank. |
@@ -153,8 +165,7 @@ Suspiciousness Ranking (all groups with score > 0):
 
 Lines (or methods) that share identical coverage profiles receive the same suspiciousness score. This is inherent to all SBFL techniques, not specific to Javelin.
 
-For **statement-level** output, Javelin uses dense ranking (ties share the same integer rank).
+Two ranking strategies are available via `--ranking` at both granularity levels:
 
-For **method-level** output, two strategies are available via `--ranking`:
-- **Dense** (default): ties share the same rank, next rank is the next integer. Example: `1, 2, 2, 3`.
-- **Average (MID)**: ties receive the mean of their ordinal positions. Example: `1.0, 2.5, 2.5, 4.0`. This is the standard ranking used in SBFL evaluation literature for computing Top-N and EXAM scores.
+- **Dense** (default, recommended for debugging): ties share the same rank, next rank is the next integer. Example: `1.0, 2.0, 2.0, 3.0`.
+- **Average (MID)** (for evaluation): ties receive the mean of their ordinal positions. Example: `1.0, 2.5, 2.5, 4.0`. This is the standard ranking used in SBFL evaluation literature (Pearson et al. ICSE 2017, Sarhan & Beszedes 2023) for computing Top-N and EXAM scores.

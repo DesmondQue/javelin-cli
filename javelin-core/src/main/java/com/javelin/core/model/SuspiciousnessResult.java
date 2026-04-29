@@ -6,9 +6,9 @@ public final class SuspiciousnessResult {
     private final String fullyQualifiedClass;
     private final int lineNumber;
     private final double score;
-    private final int rank;
+    private final double rank;
 
-    public SuspiciousnessResult(String fullyQualifiedClass, int lineNumber, double score, int rank) {
+    public SuspiciousnessResult(String fullyQualifiedClass, int lineNumber, double score, double rank) {
         this.fullyQualifiedClass = fullyQualifiedClass;
         this.lineNumber = lineNumber;
         this.score = score;
@@ -18,7 +18,7 @@ public final class SuspiciousnessResult {
     public String fullyQualifiedClass() { return fullyQualifiedClass; }
     public int lineNumber() { return lineNumber; }
     public double score() { return score; }
-    public int rank() { return rank; }
+    public double rank() { return rank; }
 
     public String getLineId() {
         return fullyQualifiedClass + ":" + lineNumber;
@@ -29,7 +29,7 @@ public final class SuspiciousnessResult {
     }
 
     public String toDisplayString() {
-        return String.format("Rank %d: %s:%d (Score: %.4f)", rank, fullyQualifiedClass, lineNumber, score);
+        return String.format("Rank %.1f: %s:%d (Score: %.4f)", rank, fullyQualifiedClass, lineNumber, score);
     }
 
     @Override
@@ -38,7 +38,7 @@ public final class SuspiciousnessResult {
         if (o == null || getClass() != o.getClass()) return false;
         SuspiciousnessResult that = (SuspiciousnessResult) o;
         return lineNumber == that.lineNumber && Double.compare(that.score, score) == 0
-                && rank == that.rank && Objects.equals(fullyQualifiedClass, that.fullyQualifiedClass);
+                && Double.compare(that.rank, rank) == 0 && Objects.equals(fullyQualifiedClass, that.fullyQualifiedClass);
     }
 
     @Override

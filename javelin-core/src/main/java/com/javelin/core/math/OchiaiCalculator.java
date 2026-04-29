@@ -44,6 +44,10 @@ public class OchiaiCalculator {
      * @return List of SuspiciousnessResult, sorted by score descending, with ranks assigned
      */
     public List<SuspiciousnessResult> calculate(SpectrumMatrix matrix) {
+        return calculate(matrix, false);
+    }
+
+    public List<SuspiciousnessResult> calculate(SpectrumMatrix matrix, boolean useAverageRank) {
         Map<String, int[]> lineCounts = matrix.lineCounts();
         int totalFailed = matrix.totalFailed();
 
@@ -52,7 +56,7 @@ public class OchiaiCalculator {
         for (Map.Entry<String, int[]> entry : lineCounts.entrySet()) {
             String lineKey = entry.getKey();
             int[] counts = entry.getValue();
-            
+
             int a11 = counts[0]; // failed & covered
             int a10 = counts[1]; // passed & covered
 
@@ -65,11 +69,9 @@ public class OchiaiCalculator {
             results.add(new SuspiciousnessResult(className, lineNumber, score, 0));
         }
 
-        results.sort(Comparator.comparingDouble(SuspiciousnessResult::score).reversed()); //sort descending
+        results.sort(Comparator.comparingDouble(SuspiciousnessResult::score).reversed());
 
-        results = assignDenseRanks(results);
-
-        return results;
+        return useAverageRank ? assignAverageRanks(results) : assignDenseRanks(results);
     }
 
     /**
@@ -136,6 +138,38 @@ public class OchiaiCalculator {
                     result.score(),
                     currentRank
             ));
+        }
+
+        return rankedResults;
+    }
+
+    private List<SuspiciousnessResult> assignAverageRanks(List<SuspiciousnessResult> sortedResults) {
+        if (sortedResults.isEmpty()) {
+            return sortedResults;
+        }
+
+        List<SuspiciousnessResult> rankedResults = new ArrayList<>(sortedResults.size());
+        int i = 0;
+        int n = sortedResults.size();
+
+        while (i < n) {
+            double score = sortedResults.get(i).score();
+            int start = i;
+            while (i < n && Double.compare(sortedResults.get(i).score(), score) == 0) {
+                i++;
+            }
+            int groupSize = i - start;
+            double midRank = (start + 1) + (groupSize - 1) / 2.0;
+
+            for (int j = start; j < i; j++) {
+                SuspiciousnessResult result = sortedResults.get(j);
+                rankedResults.add(new SuspiciousnessResult(
+                        result.fullyQualifiedClass(),
+                        result.lineNumber(),
+                        result.score(),
+                        midRank
+                ));
+            }
         }
 
         return rankedResults;

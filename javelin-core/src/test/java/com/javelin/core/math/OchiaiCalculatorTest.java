@@ -83,8 +83,8 @@ class OchiaiCalculatorTest {
 
         List<SuspiciousnessResult> results = calc.calculate(matrix);
 
-        long rank1Count = results.stream().filter(r -> r.rank() == 1).count();
-        long rank2Count = results.stream().filter(r -> r.rank() == 2).count();
+        long rank1Count = results.stream().filter(r -> r.rank() == 1.0).count();
+        long rank2Count = results.stream().filter(r -> r.rank() == 2.0).count();
         assertEquals(2, rank1Count, "both score-1.0 lines should be rank 1");
         assertEquals(1, rank2Count, "score-0.0 line should be rank 2");
     }
@@ -97,7 +97,22 @@ class OchiaiCalculatorTest {
 
         List<SuspiciousnessResult> results = calc.calculate(matrix);
 
-        assertEquals(1, results.get(0).rank());
+        assertEquals(1.0, results.get(0).rank(), 1e-9);
+    }
+
+    @Test
+    void calculate_averageRankingTies() {
+        Map<String, int[]> lines = new HashMap<>();
+        lines.put("com.example.Foo:10", new int[]{1, 0}); // score 1.0
+        lines.put("com.example.Foo:20", new int[]{1, 0}); // score 1.0
+        lines.put("com.example.Foo:30", new int[]{0, 1}); // score 0.0
+        SpectrumMatrix matrix = new SpectrumMatrix(lines, 1, 1);
+
+        List<SuspiciousnessResult> results = calc.calculate(matrix, true);
+
+        assertEquals(1.5, results.get(0).rank(), 1e-9, "tied score-1.0 lines should share MID rank 1.5");
+        assertEquals(1.5, results.get(1).rank(), 1e-9);
+        assertEquals(3.0, results.get(2).rank(), 1e-9, "score-0.0 line should be rank 3.0");
     }
 
     @Test

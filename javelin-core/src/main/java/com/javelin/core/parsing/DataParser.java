@@ -222,10 +222,13 @@ public class DataParser {
                         boolean covered = (status == ICounter.FULLY_COVERED ||
                                            status == ICounter.PARTLY_COVERED);
 
-                        allLineCoverage.add(new LineCoverage(className, lineNum, covered));
-
                         if (covered) {
+                            LineCoverage uncovered = new LineCoverage(className, lineNum, false);
+                            allLineCoverage.remove(uncovered);
+                            allLineCoverage.add(new LineCoverage(className, lineNum, true));
                             coveredLines.add(lineNum);
+                        } else {
+                            allLineCoverage.add(new LineCoverage(className, lineNum, false));
                         }
                     }
                 }

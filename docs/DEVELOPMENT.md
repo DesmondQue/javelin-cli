@@ -23,4 +23,7 @@
 
 # Update Homebrew formula version and SHA
 ./gradlew updateHomebrew
+
+# Update Scoop manifest version and SHA
+./gradlew updateScoop
 ```

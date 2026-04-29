@@ -24,15 +24,15 @@ class CsvExporterTest {
 
     @Test
     void exportToString_singleResult_correctFormat() {
-        SuspiciousnessResult r = new SuspiciousnessResult("com.example.Foo", 42, 1.0, 1);
+        SuspiciousnessResult r = new SuspiciousnessResult("com.example.Foo", 42, 1.0, 1.0);
         String csv = exporter.exportToString(List.of(r));
 
-        assertTrue(csv.contains("com.example.Foo,42,1.000000,1"));
+        assertTrue(csv.contains("com.example.Foo,42,1.000000,1.0"));
     }
 
     @Test
     void exportToString_scoreFormattedToSixDecimals() {
-        SuspiciousnessResult r = new SuspiciousnessResult("com.A", 1, 1.0 / Math.sqrt(2), 1);
+        SuspiciousnessResult r = new SuspiciousnessResult("com.A", 1, 1.0 / Math.sqrt(2), 1.0);
         String csv = exporter.exportToString(List.of(r));
 
         // 1/sqrt(2) ≈ 0.707107
@@ -42,7 +42,7 @@ class CsvExporterTest {
     @Test
     void exportToString_classNameWithComma_quoted() {
         // Commas in class names (unlikely but must be escaped)
-        SuspiciousnessResult r = new SuspiciousnessResult("com.a,b", 1, 0.5, 1);
+        SuspiciousnessResult r = new SuspiciousnessResult("com.a,b", 1, 0.5, 1.0);
         String csv = exporter.exportToString(List.of(r));
 
         assertTrue(csv.contains("\"com.a,b\""), "class name with comma should be quoted");
@@ -51,9 +51,9 @@ class CsvExporterTest {
     @Test
     void exportToString_multipleResults_allPresent() {
         List<SuspiciousnessResult> results = List.of(
-                new SuspiciousnessResult("com.A", 1, 1.0, 1),
-                new SuspiciousnessResult("com.A", 2, 0.5, 2),
-                new SuspiciousnessResult("com.B", 10, 0.0, 3)
+                new SuspiciousnessResult("com.A", 1, 1.0, 1.0),
+                new SuspiciousnessResult("com.A", 2, 0.5, 2.0),
+                new SuspiciousnessResult("com.B", 10, 0.0, 3.0)
         );
         String csv = exporter.exportToString(results);
         String[] lines = csv.split(System.lineSeparator());
@@ -64,13 +64,13 @@ class CsvExporterTest {
     @Test
     void export_writesFileCorrectly(@TempDir Path dir) throws IOException {
         Path output = dir.resolve("results.csv");
-        SuspiciousnessResult r = new SuspiciousnessResult("com.example.Bar", 7, 0.75, 1);
+        SuspiciousnessResult r = new SuspiciousnessResult("com.example.Bar", 7, 0.75, 1.0);
 
         exporter.export(List.of(r), output);
 
         assertTrue(Files.exists(output));
         String content = Files.readString(output);
-        assertTrue(content.contains("com.example.Bar,7,0.750000,1"));
+        assertTrue(content.contains("com.example.Bar,7,0.750000,1.0"));
     }
 
     @Test
@@ -85,6 +85,13 @@ class CsvExporterTest {
         String csv = exporter.exportToString(List.of());
         String[] lines = csv.split(System.lineSeparator());
         assertEquals(1, lines.length, "only the header line should be present");
+    }
+
+    @Test
+    void exportToString_averageRank_formattedAsDecimal() {
+        SuspiciousnessResult r = new SuspiciousnessResult("com.A", 1, 0.5, 2.5);
+        String csv = exporter.exportToString(List.of(r));
+        assertTrue(csv.contains(",2.5"), "average rank 2.5 should appear in statement-level output");
     }
 
     // ── Method-level export ──────────────────────────────────────────────────

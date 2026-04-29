@@ -51,17 +51,17 @@ javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g m
 
 Javelin supports two ranking strategies, selectable via `--ranking`:
 
-### Dense Ranking (default)
+### Dense Ranking (default, recommended)
 
 Tied scores share the same rank. The next distinct score gets the next integer rank.
 
 Example: scores `[1.0, 0.7, 0.7, 0.3]` → ranks `[1, 2, 2, 3]`
 
-This is the default for both statement-level and method-level output.
+This is the default and recommended strategy for interactive debugging. It produces clear integer-like ranks that tell the developer "look here first."
 
-### Average Ranking (MID)
+### Average Ranking (MID) -- for evaluation
 
-Tied scores receive the average of the positions they would occupy. This is the standard ranking used in SBFL evaluation literature (Sarhan & Beszedes 2020) for computing Top-N and EXAM scores.
+Tied scores receive the average of the positions they would occupy. This is the standard ranking used in SBFL evaluation literature (Pearson et al., ICSE 2017; Sarhan & Beszedes 2023) for computing EXAM scores and Top-N metrics.
 
 $$\text{MID}(s) = S + \frac{E - 1}{2}$$
 
@@ -71,8 +71,21 @@ Where:
 
 Example: scores `[1.0, 0.7, 0.7, 0.3]` → ranks `[1.0, 2.5, 2.5, 4.0]`
 
-Average ranking is only available with `-g method`:
+Average ranking is available with both granularity levels:
 
 ```bash
+# Statement-level with average ranking (for EXAM score computation)
+javelin -t build/classes/java/main -T build/classes/java/test -o report.csv --ranking average
+
+# Method-level with average ranking (matches Sarhan & Beszedes methodology)
 javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g method --ranking average
 ```
+
+### When to use which
+
+| Use case | Recommended settings |
+|---|---|
+| Debugging (finding the fault) | `-g statement` (default) + `--ranking dense` (default) |
+| SBFL evaluation (EXAM scores, Top-N) | `--ranking average` at either granularity level |
+| Reproducing Sarhan & Beszedes results | `-g method --ranking average` |
+| Reproducing Pearson et al. (ICSE 2017) | `-g statement --ranking average` |

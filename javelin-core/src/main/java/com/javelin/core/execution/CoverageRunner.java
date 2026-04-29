@@ -336,6 +336,7 @@ public class CoverageRunner {
             }
             // Signal offline mode and provide the obfuscated Offline class name to the forked JVM
             args.add("-Djavelin.offline=true");
+            args.add("-Djacoco-agent.destfile=" + tempDir.resolve("jacoco-all.exec").toAbsolutePath());
             String offlineClass = findOfflineRuntimeClassName();
             if (offlineClass != null) {
                 args.add("-Djavelin.offline.class=" + offlineClass);

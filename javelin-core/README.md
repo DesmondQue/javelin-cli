@@ -154,8 +154,10 @@ javelin -t build/classes/java/main \
 | `-c` | `--classpath` | No | — | Additional classpath entries (JARs or directories) |
 | `-j` | `--threads` | No | CPU core count | Number of parallel threads for test execution |
 | `-g` | `--granularity` | No | `statement` | Output granularity: `statement` or `method` |
-| | `--ranking` | No | `dense` | Ranking strategy: `dense` or `average` (only with `-g method`) |
+| | `--ranking` | No | `dense` | Ranking strategy: `dense` (recommended) or `average` (for evaluation) |
 | | `--offline` | No | `false` | Offline bytecode instrumentation (avoids agent conflicts) |
+| | `--pitest-threads` | No | CPU core count | Parallel threads for PITest mutation analysis (ochiai-ms only) |
+| | `--jvm-home` | No | — | JVM home directory for test subprocesses |
 | `-q` | `--quiet` | No | `false` | Suppress progress output |
 | `-h` | `--help` | — | — | Show help message and exit |
 | `-V` | `--version` | — | — | Print version information and exit |
@@ -164,7 +166,7 @@ javelin -t build/classes/java/main \
 
 - **At least one failing test** is required. Javelin exits with an error if all tests pass (there is nothing to localize).
 - **Zero passing tests** is allowed, but the suspiciousness ranking will be less informative.
-- `--ranking average` is only valid with `-g method`. Using it with statement-level output produces a warning.
+- `--ranking average` produces fractional MID ranks (e.g., 2.5) for EXAM score evaluation. Dense ranking is recommended for interactive debugging.
 
 ---
 
@@ -268,6 +270,9 @@ com.example.MathHelper,sqrt,(D)D,0.500000,3.0,5,15
 
 # Update Homebrew formula version and SHA
 ./gradlew updateHomebrew
+
+# Update Scoop manifest version and SHA
+./gradlew updateScoop
 ```
 
 ---
@@ -327,10 +332,12 @@ The method aggregation step is optional, activated by `-g method`.
 
 | Layer | Components | Responsibility |
 |---|---|---|
-| **Controller** | `Main.java` | CLI parsing (Picocli), input validation, pipeline orchestration |
-| **Execution** | `CoverageRunner`, `OfflineInstrumenter` | JaCoCo-instrumented test execution (online agent or offline pre-instrumentation) |
+| **Controller** | `Main`, `VersionProvider` | CLI parsing (Picocli), input validation, pipeline orchestration |
+| **Execution** | `CoverageRunner`, `OfflineInstrumenter`, `SingleJvmTestRunner`, `ProcessExecutor`, `JavelinTestListener` | JaCoCo-instrumented test execution (online agent or offline pre-instrumentation), subprocess management |
+| **Validation** | `SbflPreconditions`, `AgentConflictDetector` | SBFL precondition checks and agent conflict auto-detection |
 | **Data Processing** | `DataParser`, `MatrixBuilder` | Parse `.exec` coverage files, build spectrum hit matrix; extract method boundaries |
 | **Math** | `OchiaiCalculator`, `OchiaiMSCalculator` | Compute line-level suspiciousness scores |
 | **Aggregation** | `MethodAggregator` | Aggregate line scores to method-level, apply dense or average ranking |
-| **Mutation** *(ochiai-ms only)* | `MutationRunner`, `MutationScoreCalculator` | Scoped PITest analysis and per-test mutation scoring |
+| **Mutation** *(ochiai-ms only)* | `MutationRunner`, `MutationScoreCalculator`, `FaultRegionIdentifier`, `MutationDataParser` | Scoped PITest analysis, fault region identification, mutation data parsing, and per-test mutation scoring |
 | **Export** | `CsvExporter`, `ConsoleReporter` | Write ranked results to CSV; print terminal summary tables |
+| **Models** | `SuspiciousnessResult`, `MethodSuspiciousnessResult`, `MethodInfo`, `CoverageData`, `SpectrumMatrix`, `ExitCode`, `LineCoverage`, `MutantInfo`, `MutationData`, `TestExecResult`, `TestResult` | Data records for line-level results, method-level results, method boundaries, coverage data, spectrum matrix, exit codes, and test execution results |
