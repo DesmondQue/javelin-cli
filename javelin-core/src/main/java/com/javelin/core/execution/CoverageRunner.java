@@ -342,7 +342,7 @@ public class CoverageRunner {
                 args.add("-Djavelin.offline.class=" + offlineClass);
             }
             args.add("-cp");
-            args.add(instrumentedCp.toString());
+            args.add(ProcessExecutor.shortenClasspathIfNeeded(instrumentedCp.toString(), tempDir));
         } else {
             // Online mode: attach JaCoCo agent
             // The agent destfile is not used directly; per-test .exec files are written by the listener
@@ -353,7 +353,7 @@ public class CoverageRunner {
             );
             args.add(jacocoAgent);
             args.add("-cp");
-            args.add(classpath);
+            args.add(ProcessExecutor.shortenClasspathIfNeeded(classpath, tempDir));
         }
         
         // Main class: SingleJvmTestRunner

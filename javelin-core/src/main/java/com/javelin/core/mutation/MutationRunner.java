@@ -155,7 +155,7 @@ public class MutationRunner {
 
         // Use -cp with the full Javelin classpath (which bundles PITest in the fat JAR)
         args.add("-cp");
-        args.add(classpath);
+        args.add(ProcessExecutor.shortenClasspathIfNeeded(classpath, reportDir));
 
         // PITest entry point
         args.add("org.pitest.mutationtest.commandline.MutationCoverageReport");

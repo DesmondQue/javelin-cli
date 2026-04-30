@@ -3,11 +3,16 @@ package com.javelin.core.execution;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 
 /**
   Process Executor (Utility)
@@ -240,5 +245,46 @@ public class ProcessExecutor {
      */
     public static boolean isWindows() {
         return IS_WINDOWS;
+    }
+
+    private static final int MAX_COMMAND_LENGTH = 8_000;
+
+    /**
+     * On Windows, wraps a long classpath into a temporary manifest JAR to avoid
+     * CreateProcess error=206. On other OSes or for short classpaths, returns
+     * the original classpath unchanged.
+     *
+     * @param classpath the full classpath string (OS path-separator delimited)
+     * @param tempDir   directory in which to create the manifest JAR
+     * @return the original classpath, or the path to the manifest JAR
+     */
+    public static String shortenClasspathIfNeeded(String classpath, Path tempDir) {
+        if (!IS_WINDOWS || classpath.length() < MAX_COMMAND_LENGTH) {
+            return classpath;
+        }
+        try {
+            String separator = getPathSeparator();
+            StringBuilder cpAttribute = new StringBuilder();
+            for (String entry : classpath.split(java.util.regex.Pattern.quote(separator), -1)) {
+                if (entry.isBlank()) continue;
+                if (cpAttribute.length() > 0) cpAttribute.append(' ');
+                URI uri = Path.of(entry).toAbsolutePath().toUri();
+                cpAttribute.append(uri);
+            }
+
+            Manifest manifest = new Manifest();
+            manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            manifest.getMainAttributes().put(Attributes.Name.CLASS_PATH, cpAttribute.toString());
+
+            Path jarFile = Files.createTempFile(tempDir, "javelin-cp-", ".jar");
+            jarFile.toFile().deleteOnExit();
+            try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jarFile), manifest)) {
+                // empty JAR -- manifest is all we need
+            }
+            return jarFile.toAbsolutePath().toString();
+        } catch (IOException e) {
+            System.err.println("      WARNING: Could not create classpath JAR, using long classpath: " + e.getMessage());
+            return classpath;
+        }
     }
 }
