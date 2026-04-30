@@ -102,7 +102,7 @@ public class MutationRunner {
                 javaArgs,
                 targetPath,
                 null,
-                600 // 10-minute timeout
+                1800 // 30-minute timeout
         );
 
         if (!quiet && !result.stdout().isBlank()) {
@@ -113,7 +113,7 @@ public class MutationRunner {
         }
 
         if (result.timedOut()) {
-            throw new IOException("PITest timed out after 10 minutes");
+            throw new IOException("PITest timed out after 30 minutes");
         }
 
         // PITest exits non-zero when all mutants are covered but no kill happened — treat as OK
@@ -197,6 +197,12 @@ public class MutationRunner {
         // Use the DEFAULT mutator set
         args.add("--mutators");
         args.add("DEFAULTS");
+
+        args.add("--excludedMethods");
+        args.add("toString,hashCode,equals,clone");
+
+        args.add("--avoidCallsTo");
+        args.add("java.util.logging,org.apache.log4j,org.slf4j,org.apache.commons.logging,System.out,System.err");
 
         // Reduce console noise; errors still printed via stderr
         args.add("--verbose");

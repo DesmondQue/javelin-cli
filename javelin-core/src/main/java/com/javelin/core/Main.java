@@ -266,10 +266,10 @@ public class Main implements Callable<Integer> {
             System.err.printf("ERROR: Coverage execution failed. No .exec files generated.%n");
             return ExitCode.COVERAGE_FAILED;
         }
-        System.out.printf("      Generated %d coverage file(s):%n", testExecResults.size());
+        System.out.printf("      Collected %d coverage result(s):%n", testExecResults.size());
         for (TestExecResult execResult : testExecResults) {
             String status = execResult.passed() ? "PASSED" : "FAILED";
-            System.out.printf("        - %s [%s]%n", execResult.execFile().getFileName(), status);
+            System.out.printf("        - %s [%s]%n", execResult.testClassName(), status);
         }
         System.out.println();
 
@@ -277,7 +277,7 @@ public class Main implements Callable<Integer> {
         progress("Parsing coverage data...");
         System.out.printf("[3/%d] Parsing coverage data...%n", totalSteps);
         DataParser dataParser = new DataParser();
-        CoverageData coverageData = dataParser.parseMultiple(testExecResults, targetPath());
+        CoverageData coverageData = dataParser.parseFromEntries(testExecResults, targetPath());
         
         ConsoleReporter.printCoverageSummary(coverageData);
 

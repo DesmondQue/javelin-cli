@@ -1,11 +1,8 @@
 package com.javelin.core.execution;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,15 +17,15 @@ import org.junit.platform.launcher.TestPlan;
 
 /**
  * JUnit Platform TestExecutionListener that captures per-test JaCoCo coverage data.
- * 
+ *
  * This listener uses the JaCoCo Runtime API (accessed reflectively) to:
  * 1. Reset coverage data before each test method starts
  * 2. Dump coverage data after each test method finishes
  * 3. Store coverage bytes in a map keyed by test identifier
- * 
+ *
  * This approach mimics GZoltar's per-test coverage collection strategy,
  * allowing all tests to run in a single JVM while capturing isolated coverage.
- * 
+ *
  * Usage:
  * - The JaCoCo agent must be attached to the JVM via -javaagent
  * - Register this listener with the JUnit Platform Launcher
@@ -41,9 +38,6 @@ public class JavelinTestListener implements TestExecutionListener {
 
     /** Test pass/fail status keyed by test identifier */
     private final Map<String, Boolean> testResults = new ConcurrentHashMap<>();
-
-    /** Directory to write .exec files (optional - can be null for in-memory only) */
-    private Path outputDirectory;
 
     /** JaCoCo IAgent instance obtained reflectively (online mode) */
     private Object jacocoAgent;
@@ -72,28 +66,15 @@ public class JavelinTestListener implements TestExecutionListener {
     /** Flag indicating whether JaCoCo agent is available */
     private boolean agentAvailable = false;
 
-    /**
-     * Creates a new listener that stores coverage data in memory only
-     */
     public JavelinTestListener() {
-        this(null);
-    }
-
-    /**
-     * Creates a new listener that writes .exec files to the specified directory.
-     * 
-     * @param outputDirectory directory for .exec files (null for in-memory only)
-     */
-    public JavelinTestListener(Path outputDirectory) {
-        this.outputDirectory = outputDirectory;
         initializeJacocoAgent();
     }
 
     /**
      * Initializes the JaCoCo agent connection using reflection.
      * Detects online vs offline mode via the javelin.offline system property.
-     * - Online mode:  RT.getAgent() — standard JaCoCo agent attached via -javaagent
-     * - Offline mode: Offline.RUNTIME (RuntimeData) — accessed via the javelin.offline.class property
+     * - Online mode:  RT.getAgent() -- standard JaCoCo agent attached via -javaagent
+     * - Offline mode: Offline.RUNTIME (RuntimeData) -- accessed via the javelin.offline.class property
      */
     private void initializeJacocoAgent() {
         if (Boolean.getBoolean("javelin.offline")) {
@@ -137,9 +118,9 @@ public class JavelinTestListener implements TestExecutionListener {
      * as the javelin.offline.class system property. All accesses are via reflection.
      *
      * Data flow per test:
-     *   executionStarted  → RuntimeData.reset() clears accumulated probe bits
-     *   test runs         → instrumented classes flip probe bits via Offline.getProbes()
-     *   executionFinished → iterate RuntimeData.store.getContents(), translate to public
+     *   executionStarted  -> RuntimeData.reset() clears accumulated probe bits
+     *   test runs         -> instrumented classes flip probe bits via Offline.getProbes()
+     *   executionFinished -> iterate RuntimeData.store.getContents(), translate to public
      *                        org.jacoco.core.data.ExecutionData, serialise with
      *                        ExecutionDataWriter to standard JaCoCo binary format
      */
@@ -162,18 +143,18 @@ public class JavelinTestListener implements TestExecutionListener {
             getRTDataMethod.setAccessible(true);
             offlineShadedRuntime = getRTDataMethod.invoke(null);
 
-            // RuntimeData.reset() — clears all probe bits
+            // RuntimeData.reset() -- clears all probe bits
             offlineResetMethod = offlineShadedRuntime.getClass().getMethod("reset");
 
-            // RuntimeData.store (protected final ExecutionDataStore) — holds probe data
+            // RuntimeData.store (protected final ExecutionDataStore) -- holds probe data
             offlineStoreField = offlineShadedRuntime.getClass().getDeclaredField("store");
             offlineStoreField.setAccessible(true);
 
-            // ExecutionDataStore.getContents() — returns Collection<ExecutionData>
+            // ExecutionDataStore.getContents() -- returns Collection<ExecutionData>
             Class<?> storeClass = Class.forName(internalPkg + ".core.data.ExecutionDataStore");
             offlineGetContentsMethod = storeClass.getMethod("getContents");
 
-            // ExecutionData accessors — same semantics as public JaCoCo API
+            // ExecutionData accessors -- same semantics as public JaCoCo API
             Class<?> execDataClass = Class.forName(internalPkg + ".core.data.ExecutionData");
             offlineGetIdMethod     = execDataClass.getMethod("getId");
             offlineGetNameMethod   = execDataClass.getMethod("getName");
@@ -189,29 +170,12 @@ public class JavelinTestListener implements TestExecutionListener {
     }
 
     /**
-     * Sets the output directory for .exec files
-     * 
-     * @param outputDirectory directory for .exec files
-     */
-    public void setOutputDirectory(Path outputDirectory) {
-        this.outputDirectory = outputDirectory;
-    }
-
-    /**
      * Called when the test plan execution starts
      */
     @Override
     public void testPlanExecutionStarted(TestPlan testPlan) {
         coverageData.clear();
         testResults.clear();
-        
-        if (outputDirectory != null) {
-            try {
-                Files.createDirectories(outputDirectory);
-            } catch (IOException e) {
-                System.err.println("      WARNING: Could not create output directory: " + e.getMessage());
-            }
-        }
     }
 
     /**
@@ -274,12 +238,9 @@ public class JavelinTestListener implements TestExecutionListener {
                 } else {
                     data = (byte[]) getExecutionDataMethod.invoke(jacocoAgent, false);
                 }
-                
+
                 if (data != null && data.length > 0) {
                     coverageData.put(testId, data);
-                    if (outputDirectory != null) {
-                        writeExecFile(testId, data);
-                    }
                 }
             } catch (Exception e) {
                 System.err.println("      WARNING: Failed to dump JaCoCo coverage for " + testId + ": " + e.getMessage());
@@ -290,28 +251,28 @@ public class JavelinTestListener implements TestExecutionListener {
     /**
      * Builds a test identifier string from the TestIdentifier.
      * Format: SimpleClassName#methodName
-     * 
+     *
      * Uses the uniqueId to extract bytecode-level class and method names,
      * ensuring consistency with the parent process which discovers tests via ASM.
-     * 
+     *
      * Supports both JUnit Jupiter and JUnit Vintage (JUnit 4) uniqueId formats:
      *   Jupiter: [engine:junit-jupiter]/[class:com.example.Test]/[method:testMethod()]
      *   Vintage: [engine:junit-vintage]/[runner:com.example.Test]/[test:testMethod(com.example.Test)]
      */
     private String buildTestId(TestIdentifier testIdentifier) {
         String uniqueId = testIdentifier.getUniqueId();
-        
+
         String className = extractClassName(uniqueId);
         String methodName = extractMethodName(uniqueId);
-        
+
         if (className != null && methodName != null) {
             int lastDot = className.lastIndexOf('.');
             String simpleClassName = lastDot >= 0 ? className.substring(lastDot + 1) : className;
             return simpleClassName + "#" + methodName;
         }
-        
+
         // Last resort fallback: use legacy reporting name
-        // Normalize spaces to underscores — @DisplayNameGeneration(ReplaceUnderscores.class)
+        // Normalize spaces to underscores -- @DisplayNameGeneration(ReplaceUnderscores.class)
         // causes displayName/legacyReportingName to have spaces instead of underscores,
         // which breaks filename matching with the parent process (ASM uses bytecode names).
         String legacyName = testIdentifier.getLegacyReportingName();
@@ -322,7 +283,7 @@ public class JavelinTestListener implements TestExecutionListener {
     /**
      * Extracts the fully qualified class name from a JUnit unique ID.
      * Handles Jupiter [class:...], Jupiter [nested-class:...], and Vintage [runner:...] formats.
-     * 
+     *
      * For nested classes, appends inner class names with '$' to match bytecode naming:
      *   [class:com.example.OuterTest]/[nested-class:InnerTest] -> com.example.OuterTest$InnerTest
      */
@@ -334,7 +295,7 @@ public class JavelinTestListener implements TestExecutionListener {
             int classEnd = uniqueId.indexOf("]", classStart);
             if (classEnd > classStart) {
                 String className = uniqueId.substring(classStart + 7, classEnd);
-                
+
                 // Append any [nested-class:...] segments with '$' separator
                 int searchFrom = classEnd;
                 while (true) {
@@ -345,7 +306,7 @@ public class JavelinTestListener implements TestExecutionListener {
                     className += "$" + uniqueId.substring(nestedStart + 14, nestedEnd);
                     searchFrom = nestedEnd;
                 }
-                
+
                 return className;
             }
         }
@@ -364,7 +325,7 @@ public class JavelinTestListener implements TestExecutionListener {
      * Extracts the bytecode method name from the JUnit unique ID.
      * This is more reliable than using displayName (which can be customized via @DisplayName)
      * or legacyReportingName (which has different formats per engine).
-     * 
+     *
      * Jupiter: [method:testMethod()] -> testMethod
      * Vintage: [test:testMethod(com.example.TestClass)] -> testMethod
      */
@@ -393,22 +354,8 @@ public class JavelinTestListener implements TestExecutionListener {
     }
 
     /**
-     * Writes coverage data to an .exec file
-     */
-    private void writeExecFile(String testId, byte[] data) {
-        String safeFileName = testId.replace("#", "_").replace(".", "_").replace(" ", "_");
-        Path execFile = outputDirectory.resolve("jacoco-" + safeFileName + ".exec");
-        
-        try {
-            Files.write(execFile, data);
-        } catch (IOException e) {
-            System.err.println("      WARNING: Failed to write exec file for " + testId + ": " + e.getMessage());
-        }
-    }
-
-    /**
      * Returns the collected coverage data map
-     * 
+     *
      * @return Map of test identifiers to coverage byte arrays
      */
     public Map<String, byte[]> getCoverageData() {
@@ -417,7 +364,7 @@ public class JavelinTestListener implements TestExecutionListener {
 
     /**
      * Returns the test results map
-     * 
+     *
      * @return Map of test identifiers to pass/fail status
      */
     public Map<String, Boolean> getTestResults() {
@@ -426,24 +373,10 @@ public class JavelinTestListener implements TestExecutionListener {
 
     /**
      * Returns whether the JaCoCo agent is available
-     * 
+     *
      * @return true if JaCoCo agent is connected
      */
     public boolean isAgentAvailable() {
         return agentAvailable;
-    }
-
-    /**
-     * Returns the path to the .exec file for a specific test
-     * 
-     * @param testId the test identifier
-     * @return Path to the .exec file, or null if not written
-     */
-    public Path getExecFilePath(String testId) {
-        if (outputDirectory == null) {
-            return null;
-        }
-        String safeFileName = testId.replace("#", "_").replace(".", "_");
-        return outputDirectory.resolve("jacoco-" + safeFileName + ".exec");
     }
 }

@@ -1,48 +1,44 @@
 package com.javelin.core.model;
 
-import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Objects;
 
 public final class TestExecResult {
     private final String testClassName;
-    private final Path execFile;
+    private final byte[] coverageData;
     private final boolean passed;
-    private final int exitCode;
 
-    public TestExecResult(String testClassName, Path execFile, boolean passed, int exitCode) {
+    public TestExecResult(String testClassName, byte[] coverageData, boolean passed) {
         this.testClassName = testClassName;
-        this.execFile = execFile;
+        this.coverageData = coverageData;
         this.passed = passed;
-        this.exitCode = exitCode;
     }
 
     public String testClassName() { return testClassName; }
-    public Path execFile() { return execFile; }
+    public byte[] coverageData() { return coverageData; }
     public boolean passed() { return passed; }
-    public int exitCode() { return exitCode; }
-
-    public static TestExecResult fromExitCode(String testClassName, Path execFile, int exitCode) {
-        return new TestExecResult(testClassName, execFile, exitCode == 0, exitCode);
-    }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         TestExecResult that = (TestExecResult) o;
-        return passed == that.passed && exitCode == that.exitCode
+        return passed == that.passed
                 && Objects.equals(testClassName, that.testClassName)
-                && Objects.equals(execFile, that.execFile);
+                && Arrays.equals(coverageData, that.coverageData);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(testClassName, execFile, passed, exitCode);
+        int result = Objects.hash(testClassName, passed);
+        result = 31 * result + Arrays.hashCode(coverageData);
+        return result;
     }
 
     @Override
     public String toString() {
-        return "TestExecResult[testClassName=" + testClassName + ", execFile=" + execFile
-                + ", passed=" + passed + ", exitCode=" + exitCode + "]";
+        return "TestExecResult[testClassName=" + testClassName
+                + ", coverageData=" + (coverageData != null ? coverageData.length + " bytes" : "null")
+                + ", passed=" + passed + "]";
     }
 }

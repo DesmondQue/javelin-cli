@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,8 +14,6 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.Map;
 import java.util.jar.JarFile;
 
 import org.objectweb.asm.AnnotationVisitor;
@@ -186,7 +185,7 @@ public class CoverageRunner {
      * This is significantly faster than the previous approach of forking a new JVM per test,
      * following the GZoltar approach of in-process coverage collection.
      *
-     * @return List of TestExecResult containing coverage files and pass/fail status
+     * @return List of TestExecResult containing in-memory coverage data and pass/fail status
      * @throws IOException if temp files cannot be created
      */
     public List<TestExecResult> run() throws IOException {
@@ -270,21 +269,15 @@ public class CoverageRunner {
                 System.err.println("      WARNING: Subprocess exited with unexpected code: " + result.exitCode());
             }
 
-            // List temp directory contents for diagnostic purposes (verbose only)
-            if (!quiet) {
-                try (var stream = Files.list(tempDir)) {
-                    List<Path> tempFiles = stream.collect(Collectors.toList());
-                    System.out.println("      Temp directory (" + tempDir + ") contains " + tempFiles.size() + " file(s):");
-                    for (Path f : tempFiles) {
-                        System.out.println("        " + f.getFileName() + " (" + Files.size(f) + " bytes)");
-                    }
-                } catch (IOException e) {
-                    System.err.println("      WARNING: Could not list temp directory: " + e.getMessage());
-                }
+            // Read consolidated results file
+            List<TestExecResult> results;
+            try {
+                results = SingleJvmTestRunner.readCombinedResultsFile(tempDir);
+                if (!quiet) System.out.println("      Read " + results.size() + " result(s) from javelin-results.bin");
+            } catch (IOException e) {
+                System.err.println("      ERROR: Could not read results file: " + e.getMessage());
+                results = new ArrayList<>();
             }
-
-            // Collect results from output directory
-            List<TestExecResult> results = collectResults(testSpecifiers);
 
             long passedCount = results.stream().filter(TestExecResult::passed).count();
             long failedCount = results.size() - passedCount;
@@ -363,9 +356,17 @@ public class CoverageRunner {
         args.add("--output");
         args.add(tempDir.toAbsolutePath().toString());
         
-        // Test specifiers
-        args.add("--tests");
-        args.addAll(testSpecifiers);
+        // Write test specifiers to a file and pass via --tests-file (avoids
+        // Windows CreateProcess error=206 on large projects like JFreeChart).
+        Path testsFile = tempDir.resolve("test-specifiers.txt");
+        try {
+            Files.write(testsFile, testSpecifiers, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(
+                    "Failed to write test specifiers file: " + testsFile, e);
+        }
+        args.add("--tests-file");
+        args.add(testsFile.toAbsolutePath().toString());
 
         return args;
     }
@@ -395,55 +396,6 @@ public class CoverageRunner {
         }
     }
 
-    /**
-     * Collects test results and maps them to TestExecResult objects.
-     */
-    private List<TestExecResult> collectResults(List<String> testSpecifiers) {
-        List<TestExecResult> results = new ArrayList<>();
-        
-        // Try to read the results file
-        Map<String, Boolean> testResults = null;
-        try {
-            testResults = SingleJvmTestRunner.readResultsFile(tempDir);
-            if (!quiet) System.out.println("      Read " + testResults.size() + " test result(s) from results file");
-        } catch (IOException e) {
-            System.err.println("      WARNING: Could not read test results file: " + tempDir.resolve("test-results.dat") + " - " + e.getMessage());
-        }
-        
-        for (String specifier : testSpecifiers) {
-            // Parse className#methodName
-            String[] parts = specifier.split("#");
-            String className = parts[0];
-            String methodName = parts.length > 1 ? parts[1] : "";
-            
-            String simpleClassName = className.contains(".") 
-                    ? className.substring(className.lastIndexOf('.') + 1) 
-                    : className;
-            String testId = simpleClassName + "#" + methodName;
-            
-            // Find the corresponding .exec file
-            String safeFileName = testId.replace("#", "_").replace(".", "_").replace(" ", "_");
-            Path execFile = tempDir.resolve("jacoco-" + safeFileName + ".exec");
-            
-            if (Files.exists(execFile)) {
-                boolean passed = testResults != null && testResults.getOrDefault(testId, false);
-                results.add(new TestExecResult(testId, execFile, passed, passed ? 0 : 1));
-                if (!quiet) System.out.println("        " + testId + ": " + (passed ? "PASSED" : "FAILED"));
-            } else {
-                // Try alternate naming patterns
-                Path altExecFile = tempDir.resolve("jacoco-" + simpleClassName + "_" + methodName + ".exec");
-                if (Files.exists(altExecFile)) {
-                    boolean passed = testResults != null && testResults.getOrDefault(testId, false);
-                    results.add(new TestExecResult(testId, altExecFile, passed, passed ? 0 : 1));
-                    if (!quiet) System.out.println("        " + testId + ": " + (passed ? "PASSED" : "FAILED"));
-                } else {
-                    System.err.println("      WARNING: No coverage file found for " + testId);
-                }
-            }
-        }
-        
-        return results;
-    }
 
     /**
       sets up a temporary directory for execution artifacts

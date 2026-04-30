@@ -2,6 +2,7 @@ package com.javelin.core.math;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,12 +59,31 @@ public class OchiaiMSCalculator {
         int totalFailed = matrix.totalFailed();
         List<SuspiciousnessResult> results = new ArrayList<>();
 
+        Map<String, List<String>> passingTestsByLine = new HashMap<>();
+        for (Map.Entry<String, TestResult> testEntry : coverageData.testResults().entrySet()) {
+            String testId = testEntry.getKey();
+            if (!testEntry.getValue().passed()) continue;
+            Map<String, Set<Integer>> testCov = coverageData.coveragePerTest().get(testId);
+            if (testCov == null) continue;
+            for (Map.Entry<String, Set<Integer>> classCov : testCov.entrySet()) {
+                String className = classCov.getKey();
+                for (int lineNum : classCov.getValue()) {
+                    String lineKey = className + ":" + lineNum;
+                    passingTestsByLine.computeIfAbsent(lineKey, k -> new ArrayList<>()).add(testId);
+                }
+            }
+        }
+
         for (Map.Entry<String, int[]> entry : lineCounts.entrySet()) {
             String lineKey = entry.getKey();
             int[] counts = entry.getValue();
             int a11 = counts[0]; // failed & covered
 
-            double discountedPassed = computeDiscountedPassed(lineKey, coverageData, mutationScores);
+            double discountedPassed = 0.0;
+            List<String> coveringTests = passingTestsByLine.getOrDefault(lineKey, List.of());
+            for (String testId : coveringTests) {
+                discountedPassed += mutationScores.getOrDefault(testId, 0.0);
+            }
 
             double score = calculateOchiaiMSScore(a11, discountedPassed, totalFailed);
 
@@ -78,44 +98,7 @@ public class OchiaiMSCalculator {
         return useAverageRank ? assignAverageRanks(results) : assignDenseRanks(results);
     }
 
-    /**
-     * Computes the sum of mutation scores for all passing tests that cover the given line.
-     *
-     * @param lineKey        "className:lineNumber" key from SpectrumMatrix
-     * @param coverageData   Phase 1 per-test coverage data
-     * @param mutationScores testId → MS(t)
-     * @return discounted_passed value for this line
-     */
-    private double computeDiscountedPassed(
-            String lineKey,
-            CoverageData coverageData,
-            Map<String, Double> mutationScores) {
 
-        int sep = lineKey.lastIndexOf(':');
-        String className = lineKey.substring(0, sep);
-        int lineNumber = Integer.parseInt(lineKey.substring(sep + 1));
-
-        double discounted = 0.0;
-
-        for (Map.Entry<String, TestResult> testEntry : coverageData.testResults().entrySet()) {
-            String testId = testEntry.getKey();
-            TestResult result = testEntry.getValue();
-
-            if (!result.passed()) continue; // only count passing tests
-
-            // Check if this passing test covers line s
-            Map<String, Set<Integer>> testCov = coverageData.coveragePerTest().get(testId);
-            if (testCov == null) continue;
-            Set<Integer> lines = testCov.get(className);
-            if (lines == null || !lines.contains(lineNumber)) continue;
-
-            // Add this passing test's mutation score
-            double ms = mutationScores.getOrDefault(testId, 0.0);
-            discounted += ms;
-        }
-
-        return discounted;
-    }
 
     /**
      * Calculates the Ochiai-MS score for a single line.
