@@ -55,9 +55,9 @@ import picocli.CommandLine.Option;
     description = "Automated Spectrum-Based Fault Localization for Java",
     header = {
         "",
-        "+==================================================+",
-        "|                   Javelin Core                    |",
-        "+==================================================+",
+        "+========================================================+",
+        "|                      JAVELIN CLI                       |",
+        "+========================================================+",
         ""
     },
     descriptionHeading = "%n",
@@ -174,9 +174,9 @@ public class Main implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
-        System.out.printf("%n+===============================================================+%n");
-        System.out.printf("|                          Javelin Core                           |%n");
-        System.out.printf("+===============================================================+%n%n");
+        System.out.printf("%n+========================================================+%n");
+        System.out.printf("|                      JAVELIN CLI                       |%n");
+        System.out.printf("+========================================================+%n%n");
 
         //step 0: validate algorithm selection
         String algo = algorithm().toLowerCase().trim();

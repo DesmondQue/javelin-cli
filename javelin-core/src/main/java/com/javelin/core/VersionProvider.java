@@ -10,11 +10,11 @@ public class VersionProvider implements IVersionProvider {
         String version = loadVersion();
         return new String[]{
             "",
-            "+===============================================================+",
-            "|                      Javelin Core v" + version + padRight(version) + "|",
-            "+===============================================================+",
+            "+========================================================+",
+            "|                 JAVELIN CLI v" + version + pad(version) + "|",
+            "+========================================================+",
             "",
-            "javelin-core " + version
+            "javelin-cli " + version
         };
     }
 
@@ -26,12 +26,10 @@ public class VersionProvider implements IVersionProvider {
         return props.getProperty("version", "unknown");
     }
 
-    // Pad to keep the banner box width consistent (banner inner width = 63 chars)
-    private static String padRight(String version) {
-        // "                      Javelin Core v" = 36 chars, "|" at end, total inner = 63
-        // printed = 36 + version.length(), need total = 62 before closing "|"
-        int printed = 36 + version.length();
-        int needed = 62 - printed;
-        return " ".repeat(Math.max(0, needed));
+    private static String pad(String version) {
+        int contentLen = "                 JAVELIN CLI v".length() + version.length();
+        int innerWidth = 56;
+        int needed = innerWidth - contentLen;
+        return " ".repeat(Math.max(1, needed));
     }
 }
