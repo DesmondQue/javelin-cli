@@ -3,7 +3,7 @@ class JavelinCli < Formula
   homepage "https://github.com/DesmondQue/javelin-cli"
   version "1.3.1-beta"
   url "https://github.com/DesmondQue/javelin-cli/releases/download/v1.3.1-beta/javelin-cli-1.3.1-beta.tar"
-  sha256 "70035f49770159f0e0e0effb5129a63ba6d94eee8507dfc101e7e454bccfd89d"
+  sha256 "765bcf2627e341dd104d52e9a6f04c8ca09e75c67d381c7b5bab1860bc6e5b24"
   license "MIT"
 
   def install

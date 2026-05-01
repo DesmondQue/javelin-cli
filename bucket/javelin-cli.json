@@ -4,7 +4,7 @@
     "homepage": "https://github.com/DesmondQue/javelin-cli",
     "license": "MIT",
     "url": "https://github.com/DesmondQue/javelin-cli/releases/download/v1.3.1-beta/javelin-cli-1.3.1-beta.zip",
-    "hash": "89fa410eb28619ccd96ccfd4ef4934136de3b8d5289e2c7db45506a4ce3698f2",
+    "hash": "c655a60b96cf8ffc86a97e1a09808747647db46089dde3b341b36861137679ef",
     "extract_dir": "javelin",
     "bin": "bin\\javelin.bat",
     "suggest": {
