@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.javelin"
-version = "1.3.1-beta"
+version = "1.4.0-beta"
 
 java {
     toolchain {
