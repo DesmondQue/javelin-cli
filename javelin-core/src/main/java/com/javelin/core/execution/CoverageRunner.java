@@ -98,7 +98,8 @@ public class CoverageRunner {
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 String fileName = file.getFileName().toString();
                 if (fileName.endsWith("Test.class") || fileName.endsWith("Tests.class")
-                        || fileName.endsWith("TestCase.class") || fileName.startsWith("Test")) {
+                        || fileName.endsWith("TestCase.class")
+                        || (fileName.startsWith("Test") && fileName.endsWith(".class"))) {
                     if (!isAbstractClass(file)) {
                         Path relativePath = dir.relativize(file);
                         String className = relativePath.toString()
@@ -119,7 +120,7 @@ public class CoverageRunner {
         try (var is = Files.newInputStream(classFile)) {
             ClassReader cr = new ClassReader(is);
             return (cr.getAccess() & Opcodes.ACC_ABSTRACT) != 0;
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             return false;
         }
     }
