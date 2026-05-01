@@ -84,7 +84,7 @@ public class CoverageRunner {
 
     /**
      * Discovers test classes by walking the test path directory structure.
-     * Finds all files ending in Test.class or Tests.class.
+     * Finds all files matching Test*.class, *Test.class, *Tests.class, or *TestCase.class.
      *
      * @param dir the directory to search for test classes
      * @return List of fully qualified class names (e.g., com.example.CalculatorTest)
@@ -98,7 +98,7 @@ public class CoverageRunner {
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 String fileName = file.getFileName().toString();
                 if (fileName.endsWith("Test.class") || fileName.endsWith("Tests.class")
-                        || fileName.endsWith("TestCase.class")) {
+                        || fileName.endsWith("TestCase.class") || fileName.startsWith("Test")) {
                     if (!isAbstractClass(file)) {
                         Path relativePath = dir.relativize(file);
                         String className = relativePath.toString()
