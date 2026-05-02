@@ -41,22 +41,30 @@ public class MutationRunner {
     private final ProcessExecutor processExecutor;
     private final boolean quiet;
     private final Path jvmHome;
+    private final int timeoutMinutes;
 
     public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
                           String additionalClasspath, int threadCount,
                           CoverageData coverageData) {
-        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, false, null);
+        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, false, null, 0);
     }
 
     public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
                           String additionalClasspath, int threadCount,
                           CoverageData coverageData, boolean quiet) {
-        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, quiet, null);
+        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, quiet, null, 0);
     }
 
     public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
                           String additionalClasspath, int threadCount,
                           CoverageData coverageData, boolean quiet, Path jvmHome) {
+        this(targetPath, testPath, sourcePath, additionalClasspath, threadCount, coverageData, quiet, jvmHome, 0);
+    }
+
+    public MutationRunner(Path targetPath, Path testPath, Path sourcePath,
+                          String additionalClasspath, int threadCount,
+                          CoverageData coverageData, boolean quiet, Path jvmHome,
+                          int timeoutMinutes) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.sourcePath = sourcePath;
@@ -65,6 +73,7 @@ public class MutationRunner {
         this.coverageData = coverageData;
         this.quiet = quiet;
         this.jvmHome = jvmHome;
+        this.timeoutMinutes = timeoutMinutes;
         this.processExecutor = new ProcessExecutor(jvmHome);
     }
 
@@ -98,11 +107,13 @@ public class MutationRunner {
         if (!quiet) System.out.println("      Running PITest on " + targetClassNames.size() + " class(es)...");
         System.err.printf("[javelin] Running PITest on %d class(es)...%n", targetClassNames.size());
 
+        int timeoutSeconds = timeoutMinutes > 0 ? timeoutMinutes * 60 : 0;
+
         ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
                 javaArgs,
                 targetPath,
                 null,
-                1800 // 30-minute timeout
+                timeoutSeconds
         );
 
         if (!quiet && !result.stdout().isBlank()) {
@@ -113,7 +124,8 @@ public class MutationRunner {
         }
 
         if (result.timedOut()) {
-            throw new IOException("PITest timed out after 30 minutes");
+            throw new IOException("PITest timed out after " + timeoutMinutes + " minute(s). "
+                    + "Increase the timeout with --timeout or set 0 for no limit.");
         }
 
         // PITest exits non-zero when all mutants are covered but no kill happened — treat as OK
@@ -203,6 +215,14 @@ public class MutationRunner {
 
         args.add("--avoidCallsTo");
         args.add("java.util.logging,org.apache.log4j,org.slf4j,org.apache.commons.logging,System.out,System.err");
+
+        // Per-mutation timeout tuning: PITest defaults (4s constant, 1.25x factor) are
+        // too tight for large reflection-heavy projects like JacksonDatabind where
+        // mutated bytecode can cause slow-but-finite test runs under reflection.
+        args.add("--timeoutConst");
+        args.add("10000");
+        args.add("--timeoutFactor");
+        args.add("1.5");
 
         // Reduce console noise; errors still printed via stderr
         args.add("--verbose");

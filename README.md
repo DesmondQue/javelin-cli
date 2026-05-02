@@ -115,11 +115,13 @@ javelin -t build/classes/java/main \
 | | `--pitest-threads` | No | CPU cores | Parallel threads for PITest mutation analysis (ochiai-ms only) |
 | | `--jvm-home` | No | -- | JVM home directory for test subprocesses |
 | `-q` | `--quiet` | No | `false` | Suppress progress output |
+| | `--timeout` | No | `0` | Maximum time for the entire analysis in minutes (0 = no limit) |
 | `-h` | `--help` | -- | -- | Show help message |
 | `-V` | `--version` | -- | -- | Print version |
 
 - **At least one failing test** is required (nothing to localize if all pass).
 - `--ranking average` produces fractional MID ranks (e.g., 2.5) for EXAM score evaluation. Dense ranking is recommended for interactive debugging.
+- `--timeout` caps the entire analysis (coverage, mutation testing, and scoring). Each phase receives the remaining time budget, so a 60-minute timeout that spends 15 minutes on coverage leaves 45 minutes for mutation analysis. When set to 0 (default), there is no time limit. Individual mutants that cause infinite loops are still killed by PITest's per-mutation timeout regardless of this setting. For large projects, consider setting a limit (e.g., `--timeout 60`) to cap long-running analyses.
 
 ---
 

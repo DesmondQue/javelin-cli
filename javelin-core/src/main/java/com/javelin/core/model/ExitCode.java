@@ -11,4 +11,5 @@ public final class ExitCode {
     public static final int COVERAGE_FAILED  = 5;
     public static final int MUTATION_FAILED  = 6;
     public static final int OUTPUT_WRITE_ERROR = 7;
+    public static final int ANALYSIS_TIMEOUT = 8;
 }

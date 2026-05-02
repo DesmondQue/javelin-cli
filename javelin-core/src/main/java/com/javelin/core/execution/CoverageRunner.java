@@ -47,29 +47,36 @@ public class CoverageRunner {
     private final ProcessExecutor processExecutor;
     private final boolean offlineMode;
     private final boolean quiet;
+    private final long timeoutSeconds;
 
     private Path tempDir;
     private Path jacocoAgentJar;
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath) {
-        this(targetPath, testPath, additionalClasspath, false, false, null);
+        this(targetPath, testPath, additionalClasspath, false, false, null, 600);
     }
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode) {
-        this(targetPath, testPath, additionalClasspath, offlineMode, false, null);
+        this(targetPath, testPath, additionalClasspath, offlineMode, false, null, 600);
     }
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath, boolean offlineMode, boolean quiet) {
-        this(targetPath, testPath, additionalClasspath, offlineMode, quiet, null);
+        this(targetPath, testPath, additionalClasspath, offlineMode, quiet, null, 600);
     }
 
     public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath,
                           boolean offlineMode, boolean quiet, Path jvmHome) {
+        this(targetPath, testPath, additionalClasspath, offlineMode, quiet, jvmHome, 600);
+    }
+
+    public CoverageRunner(Path targetPath, Path testPath, String additionalClasspath,
+                          boolean offlineMode, boolean quiet, Path jvmHome, long timeoutSeconds) {
         this.targetPath = targetPath;
         this.testPath = testPath;
         this.additionalClasspath = additionalClasspath;
         this.offlineMode = offlineMode;
         this.quiet = quiet;
+        this.timeoutSeconds = timeoutSeconds;
         this.processExecutor = new ProcessExecutor(jvmHome);
     }
 
@@ -241,12 +248,11 @@ public class CoverageRunner {
             // Build arguments for SingleJvmTestRunner
             List<String> javaArgs = buildSingleJvmRunnerArgs(classpath, testSpecifiers, effectiveTargetPath);
 
-            // Execute single JVM process with all tests
             ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
                     javaArgs,
                     Path.of(System.getProperty("user.dir")),
                     null,
-                    600 // 10 minute timeout for all tests
+                    timeoutSeconds
             );
 
             // Print output
@@ -262,9 +268,8 @@ public class CoverageRunner {
                 }
             }
 
-            // Check subprocess exit code
             if (result.timedOut()) {
-                System.err.println("      ERROR: Subprocess timed out after 600 seconds");
+                throw new IOException("Test execution timed out after " + (timeoutSeconds / 60) + " minute(s).");
             } else if (result.exitCode() != 0 && result.exitCode() != 1) {
                 // 0 = all tests passed, 1 = some tests failed (both are valid)
                 System.err.println("      WARNING: Subprocess exited with unexpected code: " + result.exitCode());

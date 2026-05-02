@@ -100,19 +100,19 @@ public class Main implements Callable<Integer> {
 
     static class AlgorithmOpts {
         @Option(names = {"-a", "--algorithm"}, paramLabel = "<name>", order = 3,
-                description = "ochiai (default) or ochiai-ms")
+                description = "Ochiai (default) or Ochiai-MS")
         String algorithm = "ochiai";
 
         @Option(names = {"-s", "--source"}, paramLabel = "<dir>", order = 4,
-                description = "Source directory (required for ochiai-ms)")
+                description = "Source directory (required for Ochiai-MS)")
         Path sourcePath;
 
         @Option(names = {"-g", "--granularity"}, paramLabel = "<level>", order = 5,
-                description = "statement (default) or method")
+                description = "Statement (default) or method")
         String granularity = "statement";
 
         @Option(names = {"--ranking"}, paramLabel = "<strategy>", order = 6,
-                description = "dense (default) or average")
+                description = "Dense (default) or average")
         String rankingStrategy = "dense";
     }
 
@@ -140,6 +140,10 @@ public class Main implements Callable<Integer> {
         @Option(names = {"-q", "--quiet"}, order = 12,
                 description = "Suppress progress output")
         boolean quiet = false;
+
+        @Option(names = {"--timeout"}, paramLabel = "<minutes>", order = 13,
+                description = "Analysis timeout in minutes (0 = no limit, default: 0)")
+        int timeoutMinutes = 0;
     }
 
     private Path targetPath() { return required.targetPath; }
@@ -156,6 +160,7 @@ public class Main implements Callable<Integer> {
     private void setOfflineMode(boolean v) { executionOpts.offlineMode = v; }
     private String additionalClasspath() { return executionOpts.additionalClasspath; }
     private boolean quiet() { return executionOpts.quiet; }
+    private int timeoutMinutes() { return executionOpts.timeoutMinutes; }
 
     private void progress(String msg) {
         if (!quiet()) System.err.printf("[javelin] %s%n", msg);
@@ -174,6 +179,8 @@ public class Main implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        long analysisStartMs = System.currentTimeMillis();
+
         System.out.printf("%n+========================================================+%n");
         System.out.printf("|                      JAVELIN CLI                       |%n");
         System.out.printf("+========================================================+%n%n");
@@ -256,10 +263,32 @@ public class Main implements Callable<Integer> {
                 totalSteps, offlineMode() ? " (offline mode)" : "");
         progress("Running tests with coverage instrumentation" + (offlineMode() ? " (offline mode)" : "") + "...");
         long testExecStart = System.nanoTime();
-        CoverageRunner coverageRunner = new CoverageRunner(targetPath(), testPath(), additionalClasspath(), offlineMode(), quiet(), jvmHome());
-        List<TestExecResult> testExecResults = coverageRunner.run();
+
+        long coverageTimeoutSeconds = 600;
+        if (timeoutMinutes() > 0) {
+            long elapsedMs = System.currentTimeMillis() - analysisStartMs;
+            long remainingSeconds = (timeoutMinutes() * 60_000L - elapsedMs) / 1000L;
+            if (remainingSeconds <= 0) {
+                System.err.printf("ERROR: Analysis timed out after %d minute(s).%n", timeoutMinutes());
+                return ExitCode.ANALYSIS_TIMEOUT;
+            }
+            coverageTimeoutSeconds = remainingSeconds;
+        }
+
+        CoverageRunner coverageRunner = new CoverageRunner(targetPath(), testPath(), additionalClasspath(), offlineMode(), quiet(), jvmHome(), coverageTimeoutSeconds);
+        List<TestExecResult> testExecResults;
+        try {
+            testExecResults = coverageRunner.run();
+        } catch (IOException e) {
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("timed out")) {
+                System.err.printf("ERROR: %s%n", msg);
+                return ExitCode.ANALYSIS_TIMEOUT;
+            }
+            throw e;
+        }
         long testExecTimeMs = (System.nanoTime() - testExecStart) / 1_000_000;
-        
+
         stat("time.test_exec_ms", testExecTimeMs);
 
         if (testExecResults == null || testExecResults.isEmpty()) {
@@ -328,16 +357,33 @@ public class Main implements Callable<Integer> {
 
             long mutationStart = System.nanoTime();
 
+            // Calculate remaining time for PITest if a timeout was set
+            int pitestTimeoutMinutes = 0;
+            if (timeoutMinutes() > 0) {
+                long elapsedMs = System.currentTimeMillis() - analysisStartMs;
+                long remainingMs = timeoutMinutes() * 60_000L - elapsedMs;
+                if (remainingMs <= 0) {
+                    System.err.printf("ERROR: Analysis timed out after %d minute(s) before mutation analysis could start.%n", timeoutMinutes());
+                    return ExitCode.ANALYSIS_TIMEOUT;
+                }
+                pitestTimeoutMinutes = Math.max(1, (int) (remainingMs / 60_000L));
+            }
+
             // Run scoped PITest
             progress("Running PITest mutation analysis...");
             System.out.printf("[5/8] Running scoped mutation analysis (PITest)...%n");
             MutationRunner mutationRunner = new MutationRunner(
-                    targetPath(), testPath(), sourcePath(), additionalClasspath(), pitestThreadCount(), coverageData, quiet(), jvmHome());
+                    targetPath(), testPath(), sourcePath(), additionalClasspath(), pitestThreadCount(), coverageData, quiet(), jvmHome(), pitestTimeoutMinutes);
             Path reportDir;
             try {
                 reportDir = mutationRunner.run(faultRegion.targetClassNames());
             } catch (IOException e) {
-                System.err.printf("ERROR: PITest mutation analysis failed: %s%n", e.getMessage());
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("timed out")) {
+                    System.err.printf("ERROR: %s%n", msg);
+                    return ExitCode.ANALYSIS_TIMEOUT;
+                }
+                System.err.printf("ERROR: PITest mutation analysis failed: %s%n", msg);
                 return ExitCode.MUTATION_FAILED;
             }
 

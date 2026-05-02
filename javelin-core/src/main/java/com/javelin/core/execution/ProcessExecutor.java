@@ -172,8 +172,12 @@ public class ProcessExecutor {
             stdoutThread.start();
             stderrThread.start();
 
-            timedOut = !process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-            
+            if (timeoutSeconds > 0) {
+                timedOut = !process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            } else {
+                process.waitFor();
+            }
+
             if (timedOut) {
                 process.destroyForcibly();
                 stderr.append("Process timed out after ")

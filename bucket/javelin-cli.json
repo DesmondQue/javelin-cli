@@ -1,10 +1,10 @@
 {
-    "version": "1.4.0-beta",
+    "version": "1.4.1-beta",
     "description": "Automated Spectrum-Based Fault Localization for Java",
     "homepage": "https://github.com/DesmondQue/javelin-cli",
     "license": "MIT",
-    "url": "https://github.com/DesmondQue/javelin-cli/releases/download/v1.4.0-beta/javelin-cli-1.4.0-beta.zip",
-    "hash": "eb7f5f5b0c2f598ff2e1c07d6d62fbdd4f6947456df0b9dc0cb0e9477695893b",
+    "url": "https://github.com/DesmondQue/javelin-cli/releases/download/v1.4.1-beta/javelin-cli-1.4.1-beta.zip",
+    "hash": "597842556c8a1f8275be0467b997cd0bd7c0e10f75c4f0056237a48f698f41bb",
     "extract_dir": "javelin",
     "bin": "bin\\javelin.bat",
     "suggest": {
@@ -17,6 +17,6 @@
         "github": "https://github.com/DesmondQue/javelin-cli"
     },
     "autoupdate": {
-        "url": "https://github.com/DesmondQue/javelin-cli/releases/download/v1.4.0-beta/javelin-cli-1.4.0-beta.zip"
+        "url": "https://github.com/DesmondQue/javelin-cli/releases/download/v1.4.1-beta/javelin-cli-1.4.1-beta.zip"
     }
 }
