@@ -69,6 +69,16 @@ com.example.MathHelper,sqrt,(D)D,0.500000,4.0,5,15
 
 Lines not contained in any method (field initializers, static blocks) are grouped under a synthetic `<class-level>` entry.
 
+## Class Name Notation
+
+Javelin uses JVM internal naming conventions for class names in both CSV output and the results panel:
+
+- **`$` (dollar sign)** indicates an inner, nested, or anonymous class. For example, `SearchQuery$Builder` refers to the `Builder` class nested inside `SearchQuery`. Anonymous classes appear as `ClassName$1`, `ClassName$2`, etc. This notation comes directly from JaCoCo's coverage data and reflects how the JVM represents these classes in bytecode. Lines inside inner classes are tracked and ranked separately because they are distinct classes at the bytecode level, even though they share a `.java` source file with their enclosing class.
+
+- **`#` (hash)** separates a class name from a method name in method-level output. For example, `Calculator#compute` refers to the `compute` method in the `Calculator` class. This is a display convention used by Javelin (not a JVM symbol) and appears in the terminal summary's "Top Methods" column and in the plugin's results panel.
+
+Both symbols may appear together. For example, `SearchQuery$Builder#build` refers to the `build` method in the `Builder` inner class of `SearchQuery`.
+
 ## Terminal Summary
 
 ### Statement-Level

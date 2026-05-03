@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -110,8 +111,15 @@ public class ProcessExecutor {
     public ExecutionResult executeJava(List<String> javaArgs, Path workingDir,
                                         Map<String, String> environment,
                                         long timeoutSeconds) {
+        return executeJava(javaArgs, workingDir, environment, timeoutSeconds, null);
+    }
+
+    public ExecutionResult executeJava(List<String> javaArgs, Path workingDir,
+                                        Map<String, String> environment,
+                                        long timeoutSeconds,
+                                        Consumer<String> stdoutLineCallback) {
         List<String> command = buildCommand(javaArgs);
-        return execute(command, workingDir, environment, timeoutSeconds);
+        return execute(command, workingDir, environment, timeoutSeconds, stdoutLineCallback);
     }
 
     /**
@@ -126,8 +134,15 @@ public class ProcessExecutor {
     public ExecutionResult execute(List<String> command, Path workingDir,
                                     Map<String, String> environment,
                                     long timeoutSeconds) {
+        return execute(command, workingDir, environment, timeoutSeconds, null);
+    }
+
+    public ExecutionResult execute(List<String> command, Path workingDir,
+                                    Map<String, String> environment,
+                                    long timeoutSeconds,
+                                    Consumer<String> stdoutLineCallback) {
         ProcessBuilder processBuilder = new ProcessBuilder(command);
-        
+
         if (workingDir != null) {
             processBuilder.directory(workingDir.toFile());
         }
@@ -149,6 +164,11 @@ public class ProcessExecutor {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         stdout.append(line).append(System.lineSeparator());
+                        if (stdoutLineCallback != null) {
+                            try {
+                                stdoutLineCallback.accept(line);
+                            } catch (Exception ignored) {}
+                        }
                     }
                 } catch (IOException e) {
                     stderr.append("Error reading stdout: ").append(e.getMessage())
@@ -180,6 +200,9 @@ public class ProcessExecutor {
 
             if (timedOut) {
                 process.destroyForcibly();
+                try {
+                    process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+                } catch (Exception ignored) {}
                 stderr.append("Process timed out after ")
                       .append(timeoutSeconds).append(" seconds")
                       .append(System.lineSeparator());

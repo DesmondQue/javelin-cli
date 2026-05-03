@@ -142,8 +142,8 @@ public class Main implements Callable<Integer> {
         boolean quiet = false;
 
         @Option(names = {"--timeout"}, paramLabel = "<minutes>", order = 13,
-                description = "Analysis timeout in minutes (0 = no limit, default: 0)")
-        int timeoutMinutes = 0;
+                description = "Analysis timeout in minutes (0 = no limit, default: 30)")
+        int timeoutMinutes = 30;
     }
 
     private Path targetPath() { return required.targetPath; }

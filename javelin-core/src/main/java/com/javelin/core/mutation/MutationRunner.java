@@ -16,6 +16,8 @@ import java.util.Set;
 import com.javelin.core.execution.ProcessExecutor;
 import com.javelin.core.model.CoverageData;
 
+import java.util.function.Consumer;
+
 /**
  * Mutation Runner
  *
@@ -109,11 +111,19 @@ public class MutationRunner {
 
         int timeoutSeconds = timeoutMinutes > 0 ? timeoutMinutes * 60 : 0;
 
+        Consumer<String> progressRelay = quiet ? null : line -> {
+            if (line != null && !line.isBlank()) {
+                String trimmed = line.length() > 100 ? line.substring(0, 100) + "..." : line;
+                System.err.printf("[javelin] PITest: %s%n", trimmed);
+            }
+        };
+
         ProcessExecutor.ExecutionResult result = processExecutor.executeJava(
                 javaArgs,
                 targetPath,
                 null,
-                timeoutSeconds
+                timeoutSeconds,
+                progressRelay
         );
 
         if (!quiet && !result.stdout().isBlank()) {
@@ -226,7 +236,7 @@ public class MutationRunner {
 
         // Reduce console noise; errors still printed via stderr
         args.add("--verbose");
-        args.add("false");
+        args.add("true");
 
         // Parallel mutation testing threads
         args.add("--threads");
