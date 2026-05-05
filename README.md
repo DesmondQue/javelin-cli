@@ -103,21 +103,21 @@ javelin -t build/classes/java/main \
 | Flag | Long Form | Required | Default | Description |
 |---|---|---|---|---|
 | `-a` | `--algorithm` | No | `ochiai` | `ochiai` or `ochiai-ms` |
-| `-t` | `--target` | **Yes** | -- | Path to compiled application classes |
-| `-T` | `--test` | **Yes** | -- | Path to compiled test classes |
-| `-o` | `--output` | **Yes** | -- | Output CSV file path |
-| `-s` | `--source` | Only for `ochiai-ms` | -- | Path to Java source files (for PITest) |
-| `-c` | `--classpath` | No | -- | Additional classpath entries |
+| `-t` | `--target` | **Yes** | - | Path to compiled application classes |
+| `-T` | `--test` | **Yes** | - | Path to compiled test classes |
+| `-o` | `--output` | **Yes** | - | Output CSV file path |
+| `-s` | `--source` | Only for `ochiai-ms` | - | Path to Java source files (for PITest) |
+| `-c` | `--classpath` | No | - | Additional classpath entries |
 | `-j` | `--threads` | No | CPU cores | Parallel threads for test execution |
 | `-g` | `--granularity` | No | `statement` | Output granularity: `statement` (recommended) or `method` (for evaluation) |
 | | `--ranking` | No | `dense` | Ranking strategy: `dense` (recommended) or `average` (for evaluation) |
 | | `--offline` | No | `false` | Offline bytecode instrumentation (auto-enabled on agent conflicts) |
 | | `--pitest-threads` | No | CPU cores | Parallel threads for PITest mutation analysis (ochiai-ms only) |
-| | `--jvm-home` | No | -- | JVM home directory for test subprocesses |
+| | `--jvm-home` | No | - | JVM home directory for test subprocesses |
 | `-q` | `--quiet` | No | `false` | Suppress progress output |
 | | `--timeout` | No | `0` | Maximum time for the entire analysis in minutes (0 = no limit) |
-| `-h` | `--help` | -- | -- | Show help message |
-| `-V` | `--version` | -- | -- | Print version |
+| `-h` | `--help` | - | - | Show help message |
+| `-V` | `--version` | - | - | Print version |
 
 - **At least one failing test** is required (nothing to localize if all pass).
 - `--ranking average` produces fractional MID ranks (e.g., 2.5) for EXAM score evaluation. Dense ranking is recommended for interactive debugging.

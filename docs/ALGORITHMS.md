@@ -17,7 +17,7 @@ Where:
 javelin -a ochiai -t build/classes/java/main -T build/classes/java/test -o report.csv
 ```
 
-## Ochiai-MS (Mutation Score weighted) -- ⚠️ Experimental
+## Ochiai-MS (Mutation Score weighted) | Experimental
 
 > **This algorithm is experimental.** It is a novel research contribution exploring the integration of mutation testing into SBFL. Results may differ from standard Ochiai and the approach is under active evaluation.
 
@@ -59,7 +59,7 @@ Example: scores `[1.0, 0.7, 0.7, 0.3]` → ranks `[1, 2, 2, 3]`
 
 This is the default and recommended strategy for interactive debugging. It produces clear integer-like ranks that tell the developer "look here first."
 
-### Average Ranking (MID) -- for evaluation
+### Average Ranking (MID) (for evaluation)
 
 Tied scores receive the average of the positions they would occupy. This is the standard ranking used in SBFL evaluation literature (Pearson et al., ICSE 2017; Sarhan & Beszedes 2023) for computing EXAM scores and Top-N metrics.
 

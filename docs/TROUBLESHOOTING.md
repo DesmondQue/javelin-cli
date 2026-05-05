@@ -41,4 +41,4 @@ javelin -a ochiai-ms -t build/classes/java/main -T build/classes/java/test -s sr
 
 ## Method-level output shows `<class-level>` entries
 
-Lines that don't fall within any method (field initializers, static blocks, etc.) are grouped under a synthetic `<class-level>` entry. This is expected behavior -- these lines are still ranked but cannot be attributed to a specific method.
+Lines that don't fall within any method (field initializers, static blocks, etc.) are grouped under a synthetic `<class-level>` entry. This is expected behavior. These lines are still ranked but cannot be attributed to a specific method.
