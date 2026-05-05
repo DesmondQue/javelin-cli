@@ -9,7 +9,7 @@ CLI Input → Coverage Collection → Data Parsing → Matrix Building → SBFL 
 The method aggregation step is optional, activated by `-g method`.
 
 | Layer | Components | Responsibility |
-|---|---|---|
+|---|---|:---|
 | **Controller** | `Main`, `VersionProvider` | CLI parsing (Picocli), input validation, pipeline orchestration |
 | **Execution** | `CoverageRunner`, `OfflineInstrumenter`, `SingleJvmTestRunner`, `ProcessExecutor`, `JavelinTestListener` | JaCoCo-instrumented test execution (online agent or offline pre-instrumentation), subprocess management |
 | **Validation** | `SbflPreconditions`, `AgentConflictDetector` | SBFL precondition checks and agent conflict auto-detection |

@@ -13,7 +13,7 @@ Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS*
 ## Prerequisites
 
 | Requirement | Version |
-|---|---|
+|---|:---|
 | **Java JDK** | 21 or later ([Eclipse Temurin](https://adoptium.net/), [Oracle JDK](https://www.oracle.com/java/technologies/downloads/), [Amazon Corretto](https://aws.amazon.com/corretto/), or any OpenJDK 21+) |
 
 ---
@@ -101,7 +101,7 @@ javelin -t build/classes/java/main \
 ## Command Reference
 
 | Flag | Long Form | Required | Default | Description |
-|---|---|---|---|---|
+|---|---|---|---|:---|
 | `-a` | `--algorithm` | No | `ochiai` | `ochiai` or `ochiai-ms` |
 | `-t` | `--target` | **Yes** | - | Path to compiled application classes |
 | `-T` | `--test` | **Yes** | - | Path to compiled test classes |
@@ -140,7 +140,7 @@ Javelin is compiled to Java 11 bytecode and requires Java 21+ to run. The `--jvm
 ### Dependency Runtime Requirements
 
 | Component | Minimum JVM to Run | Bytecode It Can Analyze |
-|---|---|---|
+|---|---|:---|
 | **javelin-cli** | Java 21+ (enforced at startup) | N/A |
 | **JaCoCo 0.8.12** | Java 8+ | Java 5+ |
 | **PITest 1.17.4** | Java 11+ | Any bytecode loadable by the host JVM |
@@ -165,7 +165,7 @@ To avoid behavioral mismatches, point `--jvm-home` at a JDK matching the project
 ## Further Reading
 
 | Topic | Link |
-|---|---|
+|---|:---|
 | Algorithm details and formulas | [docs/ALGORITHMS.md](docs/ALGORITHMS.md) |
 | Output format (CSV and terminal) | [docs/OUTPUT_FORMAT.md](docs/OUTPUT_FORMAT.md) |
 | Offline instrumentation mode | [docs/OFFLINE_MODE.md](docs/OFFLINE_MODE.md) |

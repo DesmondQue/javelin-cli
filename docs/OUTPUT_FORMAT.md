@@ -7,7 +7,7 @@ Javelin produces two output formats depending on the granularity setting (`-g`):
 The default CSV output contains one row per executable line:
 
 | Column | Type | Description |
-|---|---|---|
+|---|---|:---|
 | `FullyQualifiedClass` | string | Fully qualified Java class name |
 | `LineNumber` | int | Line number in the source file |
 | `OchiaiScore` | float | Suspiciousness score (0.0 – 1.0), formatted to 6 decimal places |
@@ -39,7 +39,7 @@ com.example.MathHelper,15,0.500000,4.0
 When `-g method` is specified, the CSV output contains one row per method:
 
 | Column | Type | Description |
-|---|---|---|
+|---|---|:---|
 | `FullyQualifiedClass` | string | Fully qualified Java class name |
 | `MethodName` | string | Method name (e.g., `search`, `<init>` for constructors) |
 | `Descriptor` | string | JVM method descriptor for overload disambiguation (e.g., `(II)I`) |
@@ -145,7 +145,7 @@ Suspiciousness Ranking (all groups with score > 0):
 #### Statement-Level Columns
 
 | Column | Description |
-|---|---|
+|---|:---|
 | **Rank** | Dense or average rank (depending on `--ranking`). |
 | **Score** | Ochiai (or Ochiai-MS) suspiciousness score for this tier. |
 | **Lines** | Number of lines sharing this exact score. |
@@ -155,7 +155,7 @@ Suspiciousness Ranking (all groups with score > 0):
 #### Method-Level Columns
 
 | Column | Description |
-|---|---|
+|---|:---|
 | **Rank** | Dense or average rank (depending on `--ranking`). |
 | **Score** | Maximum Ochiai (or Ochiai-MS) score among the method's lines. |
 | **Methods** | Number of methods sharing this exact score/rank. |
@@ -165,7 +165,7 @@ Suspiciousness Ranking (all groups with score > 0):
 ### Ranking Overview Metrics
 
 | Metric | Description |
-|---|---|
+|---|:---|
 | **Total lines/methods** | All executable elements discovered by coverage analysis. |
 | **With score > 0** | Elements covered by at least one failing test (candidates for the fault). |
 | **Distinct groups** | Number of unique suspiciousness tiers. Fewer groups means more ties. |

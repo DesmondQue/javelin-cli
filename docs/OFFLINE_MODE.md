@@ -17,7 +17,7 @@ The original target classes directory is **never modified**.
 Javelin automatically scans the classpath (`-c`) for JARs that indicate agent conflicts:
 
 | JAR Pattern | Library |
-|---|---|
+|---|:---|
 | `mockito-inline-*.jar` | Mockito inline mocking (uses ByteBuddy internally) |
 | `byte-buddy-agent-*.jar` | ByteBuddy agent |
 | `powermock-agent-*.jar` | PowerMock |

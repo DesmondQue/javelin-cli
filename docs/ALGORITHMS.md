@@ -84,7 +84,7 @@ javelin -t build/classes/java/main -T build/classes/java/test -o report.csv -g m
 ### When to use which
 
 | Use case | Recommended settings |
-|---|---|
+|---|:---|
 | Debugging (finding the fault) | `-g statement` (default) + `--ranking dense` (default) |
 | SBFL evaluation (EXAM scores, Top-N) | `--ranking average` at either granularity level |
 | Reproducing Sarhan & Beszedes results | `-g method --ranking average` |

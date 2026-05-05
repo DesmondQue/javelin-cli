@@ -33,7 +33,7 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 ## Prerequisites
 
 | Requirement | Version | Install Guide |
-|---|---|---|
+|---|---|:---|
 | **Java JDK** | 21 or later | [Eclipse Temurin](https://adoptium.net/), [Oracle JDK](https://www.oracle.com/java/technologies/downloads/), [Amazon Corretto](https://aws.amazon.com/corretto/), or any OpenJDK 21+ distribution |
 | **Gradle** | 8.5+ *(optional, wrapper included)* | [gradle.org/install](https://gradle.org/install/) |
 
@@ -145,7 +145,7 @@ javelin -t build/classes/java/main \
 ### Options
 
 | Flag | Long Form | Required | Default | Description |
-|---|---|---|---|---|
+|---|---|---|---|:---|
 | `-a` | `--algorithm` | No | `ochiai` | Fault localization algorithm: `ochiai` or `ochiai-ms` |
 | `-t` | `--target` | **Yes** | - | Path to compiled application classes (e.g., `build/classes/java/main`) |
 | `-T` | `--test` | **Yes** | - | Path to compiled test classes (e.g., `build/classes/java/test`) |
@@ -213,7 +213,7 @@ When `-g method` is specified, line-level scores are aggregated to method-level 
 ### Statement-Level (default)
 
 | Column | Description |
-|---|---|
+|---|:---|
 | `FullyQualifiedClass` | Fully qualified Java class name |
 | `LineNumber` | Line number in the source file |
 | `OchiaiScore` | Suspiciousness score (0.0 – 1.0) |
@@ -229,7 +229,7 @@ com.example.MathHelper,15,0.500000,3
 ### Method-Level (`-g method`)
 
 | Column | Description |
-|---|---|
+|---|:---|
 | `FullyQualifiedClass` | Fully qualified Java class name |
 | `MethodName` | Method name (`<init>` for constructors) |
 | `Descriptor` | JVM method descriptor for overload disambiguation |
@@ -331,7 +331,7 @@ CLI Input → Coverage Collection → Data Parsing → Matrix Building → SBFL 
 The method aggregation step is optional, activated by `-g method`.
 
 | Layer | Components | Responsibility |
-|---|---|---|
+|---|---|:---|
 | **Controller** | `Main`, `VersionProvider` | CLI parsing (Picocli), input validation, pipeline orchestration |
 | **Execution** | `CoverageRunner`, `OfflineInstrumenter`, `SingleJvmTestRunner`, `ProcessExecutor`, `JavelinTestListener` | JaCoCo-instrumented test execution (online agent or offline pre-instrumentation), subprocess management |
 | **Validation** | `SbflPreconditions`, `AgentConflictDetector` | SBFL precondition checks and agent conflict auto-detection |
