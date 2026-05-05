@@ -48,7 +48,7 @@ Javelin instruments your Java test suite with [JaCoCo](https://www.jacoco.org/) 
 Requires [Homebrew](https://brew.sh/).
 
 ```bash
-brew tap DesmondQue/javelin-core-cli https://github.com/DesmondQue/javelin-core-cli.git
+brew tap DesmondQue/javelin-cli https://github.com/DesmondQue/javelin-cli.git
 brew install javelin-cli
 ```
 
@@ -64,8 +64,8 @@ choco install javelin-cli
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/DesmondQue/javelin-core-cli.git
-cd javelin-core-cli/javelin-core
+git clone https://github.com/DesmondQue/javelin-cli.git
+cd javelin-cli/javelin-core
 
 # 2. Build and install
 ./gradlew installDist          # macOS/Linux
