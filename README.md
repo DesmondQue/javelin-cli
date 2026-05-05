@@ -2,7 +2,7 @@
 
 Automated **Spectrum-Based Fault Localization (SBFL)** for Java projects. Javelin analyzes test pass/fail data and code coverage to rank lines of code by suspiciousness, helping you find bugs faster.
 
-Javelin supports both **statement-level** (line) and **method-level** output granularity, each with **dense** and **average (MID)** ranking strategies. Statement-level with dense ranking is the default and recommended for interactive debugging (e.g., IntelliJ plugin). Average ranking at either granularity level is intended for SBFL evaluation -- computing EXAM scores and Top-N metrics per Pearson et al. (ICSE 2017) and Sarhan & Beszedes (2023).
+Javelin supports both **statement-level** (line) and **method-level** output granularity, each with **dense** and **average (MID)** ranking strategies. Statement-level with dense ranking is the default and recommended for interactive debugging (e.g., IntelliJ plugin). Average ranking at either granularity level is intended for SBFL evaluation, computing EXAM scores and Top-N metrics per Pearson et al. (ICSE 2017) and Sarhan & Beszedes (2023).
 
 Javelin implements the standard **Ochiai** SBFL algorithm alongside **Ochiai-MS**, an **experimental** algorithm that integrates mutation testing into the SBFL pipeline. Ochiai-MS is a novel contribution of the research study overseeing the development of Javelin, exploring whether mutation score–weighted test spectra can improve fault localization accuracy.
 
@@ -129,7 +129,36 @@ javelin -t build/classes/java/main \
 
 **Project must be compiled first.** Javelin operates on compiled `.class` files and does not invoke the build tool. Run `mvn compile test-compile -DskipTests` or `./gradlew classes testClasses` before using Javelin.
 
-**Build-tool orchestrated infrastructure tests.** Javelin runs tests directly via JUnit Platform. Most tests work -- including Spring Boot `@SpringBootTest` and Testcontainers. Tests that require the build tool to manage external infrastructure (e.g., Arquillian server lifecycle, Maven Failsafe phase orchestration) are not supported.
+**Build-tool orchestrated infrastructure tests.** Javelin runs tests directly via JUnit Platform. Most tests work, including Spring Boot `@SpringBootTest` and Testcontainers. Tests that require the build tool to manage external infrastructure (e.g., Arquillian server lifecycle, Maven Failsafe phase orchestration) are not supported.
+
+---
+
+## JVM Compatibility
+
+Javelin is compiled to Java 11 bytecode and requires Java 21+ to run. The `--jvm-home` flag controls which JVM executes test subprocesses. When omitted, tests run on the same JVM as javelin-cli itself.
+
+### Dependency Runtime Requirements
+
+| Component | Minimum JVM to Run | Bytecode It Can Analyze |
+|---|---|---|
+| **javelin-cli** | Java 21+ (enforced at startup) | N/A |
+| **JaCoCo 0.8.12** | Java 8+ | Java 5+ |
+| **PITest 1.17.4** | Java 11+ | Any bytecode loadable by the host JVM |
+
+### Target Projects Using Java 8+
+
+Projects compiled for **Java 8 through Java 21** are fully supported and have been tested. When the test execution JVM (controlled by `--jvm-home` or the default runtime) is newer than the project's target version, Javelin prints a warning at startup suggesting `--jvm-home` for correct test behavior. In practice, this mismatch is harmless for most projects.
+
+### Target Projects Using Java 7 and Below
+
+Java bytecode is forward-compatible: classes compiled for older JDKs will load and execute on newer JVMs. However, tests may behave differently when the execution JVM is significantly newer than the project's target version:
+
+- **Removed APIs.** Internal APIs such as `sun.misc.BASE64Encoder`, `com.sun.image.codec.jpeg`, and `sun.security.*` were removed in later JDK releases. Tests that depend on these will fail with `NoClassDefFoundError` or `ClassNotFoundException`.
+- **Module access restrictions.** Java 9 introduced the module system, which restricts reflective access to JDK internals by default. Older frameworks that use `setAccessible(true)` on JDK-internal classes will fail with `InaccessibleObjectException` unless `--add-opens` flags are passed to the JVM.
+- **Changed runtime defaults.** String hash codes became randomized in Java 7, `SecurityManager` was deprecated for removal in Java 17, TLS protocol defaults changed across versions, and garbage collector defaults differ between major releases. Tests that assert specific runtime behavior may produce different results.
+- **Framework compatibility.** Older versions of testing frameworks (e.g., JUnit 3, early Mockito, PowerMock) may not function correctly on newer JVMs due to bytecode-level assumptions or reliance on removed internals.
+
+To avoid behavioral mismatches, point `--jvm-home` at a JDK matching the project's target version. The minimum `--jvm-home` version depends on the algorithm: **Java 8+** for Ochiai (JaCoCo only), or **Java 11+** for Ochiai-MS (PITest requires 11+).
 
 ---
 
